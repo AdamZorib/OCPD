@@ -1,0 +1,149 @@
+.button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-sm);
+    font-family: inherit;
+    font-weight: 500;
+    border: none;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    white-space: nowrap;
+    position: relative;
+    overflow: hidden;
+}
+
+.button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.button:focus-visible {
+    outline: 2px solid var(--color-accent-primary);
+    outline-offset: 2px;
+}
+
+/* Sizes */
+.sm {
+    height: 32px;
+    padding: 0 var(--spacing-md);
+    font-size: 0.8125rem;
+}
+
+.md {
+    height: 40px;
+    padding: 0 var(--spacing-lg);
+    font-size: 0.875rem;
+}
+
+.lg {
+    height: 48px;
+    padding: 0 var(--spacing-xl);
+    font-size: 1rem;
+}
+
+/* Variants */
+.primary {
+    background: var(--color-accent-gradient);
+    color: white;
+    box-shadow: var(--shadow-md);
+}
+
+.primary:hover:not(:disabled) {
+    box-shadow: var(--shadow-glow);
+    transform: translateY(-1px);
+}
+
+.primary:active:not(:disabled) {
+    transform: translateY(0);
+}
+
+.secondary {
+    background: var(--color-bg-tertiary);
+    color: var(--color-text-primary);
+    border: 1px solid var(--color-border);
+}
+
+.secondary:hover:not(:disabled) {
+    background: var(--color-bg-elevated);
+    border-color: var(--color-border-hover);
+}
+
+.ghost {
+    background: transparent;
+    color: var(--color-text-secondary);
+}
+
+.ghost:hover:not(:disabled) {
+    background: var(--color-bg-tertiary);
+    color: var(--color-text-primary);
+}
+
+.danger {
+    background: var(--color-danger);
+    color: white;
+}
+
+.danger:hover:not(:disabled) {
+    background: #dc2626;
+}
+
+.success {
+    background: var(--color-success);
+    color: white;
+}
+
+.success:hover:not(:disabled) {
+    background: #059669;
+}
+
+/* Loading */
+.loading {
+    color: transparent;
+}
+
+.spinner {
+    position: absolute;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.spinner svg {
+    width: 20px;
+    height: 20px;
+    color: currentColor;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Icon */
+.icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.icon svg {
+    width: 18px;
+    height: 18px;
+}
+
+.label {
+    display: flex;
+    align-items: center;
+}
+
+.loading .label {
+    visibility: hidden;
+}

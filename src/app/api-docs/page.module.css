@@ -1,0 +1,96 @@
+.page {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-lg);
+    height: 100%;
+    min-height: calc(100vh - 2 * var(--spacing-xl));
+}
+
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    flex-shrink: 0;
+}
+
+.title {
+    font-size: 1.875rem;
+    font-weight: 700;
+    margin: 0;
+}
+
+.subtitle {
+    font-size: 0.875rem;
+    color: var(--color-text-secondary);
+    margin-top: var(--spacing-xs);
+}
+
+.links {
+    display: flex;
+    gap: var(--spacing-md);
+}
+
+.link {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    padding: var(--spacing-sm) var(--spacing-md);
+    background: var(--color-bg-tertiary);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    color: var(--color-text-secondary);
+    font-size: 0.875rem;
+    text-decoration: none;
+    transition: all var(--transition-fast);
+}
+
+.link:hover {
+    background: var(--color-bg-elevated);
+    color: var(--color-text-primary);
+    border-color: var(--color-border-hover);
+}
+
+.swaggerContainer {
+    flex: 1;
+    background: #fff;
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    min-height: 600px;
+}
+
+/* Override Swagger UI styles for better integration */
+.swaggerContainer :global(.swagger-ui) {
+    font-family: var(--font-sans);
+}
+
+.swaggerContainer :global(.swagger-ui .topbar) {
+    display: none;
+}
+
+.swaggerContainer :global(.swagger-ui .info) {
+    margin: 20px;
+}
+
+.swaggerContainer :global(.swagger-ui .info .title) {
+    font-family: var(--font-sans);
+}
+
+.swaggerContainer :global(.swagger-ui .opblock-tag) {
+    font-family: var(--font-sans);
+}
+
+.swaggerContainer :global(.swagger-ui .opblock .opblock-summary-method) {
+    font-family: var(--font-mono);
+}
+
+.swaggerContainer :global(.swagger-ui .btn) {
+    font-family: var(--font-sans);
+}
+
+.swaggerContainer :global(.swagger-ui .opblock-description-wrapper p) {
+    font-family: var(--font-sans);
+}
+
+.swaggerContainer :global(.swagger-ui table thead tr th) {
+    font-family: var(--font-sans);
+}

@@ -1,0 +1,236 @@
+.page {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xl);
+    animation: fadeIn var(--transition-base) ease-out;
+}
+
+/* Header */
+.header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--spacing-lg);
+}
+
+.title {
+    font-size: 1.875rem;
+    font-weight: 700;
+    color: var(--color-text-primary);
+    margin: 0;
+}
+
+.subtitle {
+    font-size: 0.875rem;
+    color: var(--color-text-secondary);
+    margin-top: var(--spacing-xs);
+}
+
+.headerActions {
+    display: flex;
+    gap: var(--spacing-md);
+}
+
+/* Stats Row */
+.statsRow {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xl);
+    padding: var(--spacing-lg);
+    background: var(--color-bg-secondary);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+}
+
+.statItem {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.statValue {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--color-text-primary);
+}
+
+.statValue[data-warning="true"] {
+    color: var(--color-warning);
+}
+
+.statLabel {
+    font-size: 0.8125rem;
+    color: var(--color-text-secondary);
+}
+
+.statDivider {
+    width: 1px;
+    height: 40px;
+    background: var(--color-border);
+}
+
+/* Filters */
+.filters {
+    padding: var(--spacing-lg) !important;
+}
+
+.filtersRow {
+    display: flex;
+    gap: var(--spacing-md);
+    align-items: center;
+}
+
+.searchWrapper {
+    flex: 1;
+    max-width: 400px;
+}
+
+.filterGroup {
+    display: flex;
+    gap: var(--spacing-md);
+}
+
+.filterGroup>* {
+    width: 180px;
+}
+
+/* Table cells */
+.policyLink {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    color: var(--color-accent-primary);
+    text-decoration: none;
+    font-weight: 500;
+    font-size: 0.875rem;
+}
+
+.policyLink:hover {
+    text-decoration: underline;
+}
+
+.clientCell {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.clientName {
+    font-weight: 500;
+    color: var(--color-text-primary);
+}
+
+.clientNip {
+    font-size: 0.75rem;
+    color: var(--color-text-tertiary);
+    font-family: var(--font-mono);
+}
+
+.premiumCell {
+    font-weight: 600;
+}
+
+.expiringDate {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    color: var(--color-warning);
+}
+
+.expiringBadge {
+    font-size: 0.6875rem;
+    padding: 2px 6px;
+    background: var(--color-warning-bg);
+    color: var(--color-warning);
+    border-radius: var(--radius-full);
+}
+
+.viewLink {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius-md);
+    color: var(--color-text-tertiary);
+    transition: all var(--transition-fast);
+}
+
+.viewLink:hover {
+    background: var(--color-bg-tertiary);
+    color: var(--color-text-primary);
+}
+
+/* Empty State */
+.emptyState {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--spacing-md);
+    padding: var(--spacing-2xl);
+    text-align: center;
+    color: var(--color-text-tertiary);
+}
+
+.emptyState h3 {
+    font-size: 1.25rem;
+    color: var(--color-text-primary);
+    margin: 0;
+}
+
+.emptyState p {
+    font-size: 0.875rem;
+    color: var(--color-text-secondary);
+    margin: 0;
+}
+
+/* Responsive */
+@media (max-width: 1200px) {
+    .statsRow {
+        flex-wrap: wrap;
+    }
+}
+
+@media (max-width: 768px) {
+    .header {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .statsRow {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .statDivider {
+        display: none;
+    }
+
+    .filtersRow {
+        flex-direction: column;
+    }
+
+    .searchWrapper {
+        max-width: none;
+        width: 100%;
+    }
+
+    .filterGroup {
+        width: 100%;
+    }
+
+    .filterGroup>* {
+        flex: 1;
+        width: auto;
+    }
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}

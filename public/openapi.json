@@ -1,0 +1,1166 @@
+{
+    "openapi": "3.0.3",
+    "info": {
+        "title": "OCPD Insurance Platform API",
+        "description": "REST API dla platformy ubezpieczeń odpowiedzialności cywilnej przewoźnika drogowego (OCPD).\n\n## Funkcjonalności\n- Zarządzanie klientami (przewoźnikami)\n- Zarządzanie polisami OCPD\n- Kalkulator składek z oceną ryzyka\n- Obsługa szkód\n- Statystyki dashboardu",
+        "version": "1.0.0",
+        "contact": {
+            "name": "OCPD Support",
+            "email": "support@ocpd-platform.pl"
+        }
+    },
+    "servers": [
+        {
+            "url": "http://localhost:3000/api",
+            "description": "Development server"
+        }
+    ],
+    "tags": [
+        {
+            "name": "Dashboard",
+            "description": "Statystyki i metryki"
+        },
+        {
+            "name": "Clients",
+            "description": "Zarządzanie klientami"
+        },
+        {
+            "name": "Policies",
+            "description": "Zarządzanie polisami"
+        },
+        {
+            "name": "Quotes",
+            "description": "Wyceny i kalkulator składek"
+        },
+        {
+            "name": "Claims",
+            "description": "Zgłoszenia szkód"
+        }
+    ],
+    "paths": {
+        "/dashboard": {
+            "get": {
+                "tags": [
+                    "Dashboard"
+                ],
+                "summary": "Pobierz statystyki dashboardu",
+                "description": "Zwraca wszystkie metryki i statystyki dla dashboardu: aktywne polisy, wygasające, składki, szkody, top klientów.",
+                "operationId": "getDashboard",
+                "responses": {
+                    "200": {
+                        "description": "Statystyki dashboardu",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DashboardStats"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/clients": {
+            "get": {
+                "tags": [
+                    "Clients"
+                ],
+                "summary": "Lista klientów",
+                "description": "Pobiera listę wszystkich klientów z opcjonalnymi filtrami.",
+                "operationId": "getClients",
+                "parameters": [
+                    {
+                        "name": "search",
+                        "in": "query",
+                        "description": "Szukaj po nazwie, NIP lub email",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "riskLevel",
+                        "in": "query",
+                        "description": "Filtruj po poziomie ryzyka",
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "LOW",
+                                "MEDIUM",
+                                "HIGH",
+                                "VERY_HIGH"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "scope",
+                        "in": "query",
+                        "description": "Filtruj po zakresie terytorialnym",
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "POLAND",
+                                "EUROPE",
+                                "WORLD"
+                            ]
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Lista klientów",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/components/schemas/Client"
+                                            }
+                                        },
+                                        "total": {
+                                            "type": "integer"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "Clients"
+                ],
+                "summary": "Utwórz nowego klienta",
+                "operationId": "createClient",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ClientInput"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Klient utworzony",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Client"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/BadRequest"
+                    }
+                }
+            }
+        },
+        "/clients/{id}": {
+            "get": {
+                "tags": [
+                    "Clients"
+                ],
+                "summary": "Pobierz klienta",
+                "operationId": "getClient",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Dane klienta",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Client"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/NotFound"
+                    }
+                }
+            },
+            "put": {
+                "tags": [
+                    "Clients"
+                ],
+                "summary": "Aktualizuj klienta",
+                "operationId": "updateClient",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ClientInput"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Klient zaktualizowany",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Client"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/NotFound"
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "Clients"
+                ],
+                "summary": "Usuń klienta",
+                "operationId": "deleteClient",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Klient usunięty"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/NotFound"
+                    }
+                }
+            }
+        },
+        "/policies": {
+            "get": {
+                "tags": [
+                    "Policies"
+                ],
+                "summary": "Lista polis",
+                "operationId": "getPolicies",
+                "parameters": [
+                    {
+                        "name": "search",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "status",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "DRAFT",
+                                "QUOTED",
+                                "ACTIVE",
+                                "EXPIRED",
+                                "CANCELLED"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "scope",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "POLAND",
+                                "EUROPE",
+                                "WORLD"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "clientId",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Lista polis ze statystykami",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/components/schemas/Policy"
+                                            }
+                                        },
+                                        "total": {
+                                            "type": "integer"
+                                        },
+                                        "stats": {
+                                            "$ref": "#/components/schemas/PolicyStats"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "Policies"
+                ],
+                "summary": "Utwórz nową polisę",
+                "operationId": "createPolicy",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PolicyInput"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Polisa utworzona",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Policy"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/BadRequest"
+                    }
+                }
+            }
+        },
+        "/policies/{id}": {
+            "get": {
+                "tags": [
+                    "Policies"
+                ],
+                "summary": "Pobierz polisę",
+                "operationId": "getPolicy",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Dane polisy",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Policy"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/NotFound"
+                    }
+                }
+            },
+            "patch": {
+                "tags": [
+                    "Policies"
+                ],
+                "summary": "Zaktualizuj status polisy",
+                "operationId": "updatePolicyStatus",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": [
+                                    "status"
+                                ],
+                                "properties": {
+                                    "status": {
+                                        "type": "string",
+                                        "enum": [
+                                            "DRAFT",
+                                            "QUOTED",
+                                            "ACTIVE",
+                                            "EXPIRED",
+                                            "CANCELLED"
+                                        ]
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Status zaktualizowany"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/NotFound"
+                    }
+                }
+            }
+        },
+        "/quotes": {
+            "get": {
+                "tags": [
+                    "Quotes"
+                ],
+                "summary": "Lista wycen",
+                "operationId": "getQuotes",
+                "parameters": [
+                    {
+                        "name": "status",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Lista wycen",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/components/schemas/Quote"
+                                            }
+                                        },
+                                        "total": {
+                                            "type": "integer"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "Quotes"
+                ],
+                "summary": "Utwórz nową wycenę",
+                "operationId": "createQuote",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/QuoteInput"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Wycena utworzona"
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/BadRequest"
+                    }
+                }
+            }
+        },
+        "/quotes/calculate": {
+            "post": {
+                "tags": [
+                    "Quotes"
+                ],
+                "summary": "Kalkulacja składki",
+                "description": "Oblicza składkę ubezpieczeniową na podstawie parametrów. Obsługuje dwa tryby:\n- **Quick Quote** - szybka wycena z zakresem min/max\n- **Full Quote** - pełna kalkulacja z oceną ryzyka i referral",
+                "operationId": "calculatePremium",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CalculationInput"
+                            },
+                            "examples": {
+                                "quickQuote": {
+                                    "summary": "Szybka wycena",
+                                    "value": {
+                                        "sumInsured": 300000,
+                                        "territorialScope": "EUROPE",
+                                        "quickQuote": true
+                                    }
+                                },
+                                "fullQuote": {
+                                    "summary": "Pełna kalkulacja",
+                                    "value": {
+                                        "sumInsured": 500000,
+                                        "territorialScope": "EUROPE",
+                                        "selectedClauses": [
+                                            "GROSS_NEGLIGENCE",
+                                            "FRIDGE"
+                                        ],
+                                        "yearsInBusiness": 10,
+                                        "fleetSize": 15,
+                                        "apkData": {
+                                            "mainCargoTypes": [
+                                                "Elektronika"
+                                            ],
+                                            "averageCargoValue": 50000,
+                                            "claimsLast3Years": 0
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Wynik kalkulacji",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CalculationResult"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/BadRequest"
+                    }
+                }
+            }
+        },
+        "/claims": {
+            "get": {
+                "tags": [
+                    "Claims"
+                ],
+                "summary": "Lista szkód",
+                "operationId": "getClaims",
+                "parameters": [
+                    {
+                        "name": "status",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "clientId",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "policyId",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Lista szkód ze statystykami",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/components/schemas/Claim"
+                                            }
+                                        },
+                                        "total": {
+                                            "type": "integer"
+                                        },
+                                        "stats": {
+                                            "$ref": "#/components/schemas/ClaimStats"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "Claims"
+                ],
+                "summary": "Zgłoś szkodę",
+                "operationId": "createClaim",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ClaimInput"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Szkoda zgłoszona"
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/BadRequest"
+                    }
+                }
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "DashboardStats": {
+                "type": "object",
+                "properties": {
+                    "activePolicies": {
+                        "type": "integer",
+                        "example": 4
+                    },
+                    "expiringPolicies30Days": {
+                        "type": "integer",
+                        "example": 1
+                    },
+                    "totalPremium": {
+                        "type": "number",
+                        "example": 44560
+                    },
+                    "openClaims": {
+                        "type": "integer",
+                        "example": 2
+                    },
+                    "claimsRatio": {
+                        "type": "number",
+                        "example": 0.94
+                    },
+                    "topClients": {
+                        "type": "array",
+                        "items": {
+                            "type": "object"
+                        }
+                    }
+                }
+            },
+            "Client": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "example": "client-1"
+                    },
+                    "nip": {
+                        "type": "string",
+                        "example": "1234567890"
+                    },
+                    "name": {
+                        "type": "string",
+                        "example": "Trans-Europa Sp. z o.o."
+                    },
+                    "email": {
+                        "type": "string",
+                        "format": "email"
+                    },
+                    "phone": {
+                        "type": "string"
+                    },
+                    "riskProfile": {
+                        "$ref": "#/components/schemas/RiskProfile"
+                    }
+                }
+            },
+            "ClientInput": {
+                "type": "object",
+                "required": [
+                    "nip",
+                    "name",
+                    "email"
+                ],
+                "properties": {
+                    "nip": {
+                        "type": "string",
+                        "example": "1234567890"
+                    },
+                    "name": {
+                        "type": "string",
+                        "example": "Nowy Transport Sp. z o.o."
+                    },
+                    "email": {
+                        "type": "string",
+                        "format": "email"
+                    },
+                    "phone": {
+                        "type": "string"
+                    },
+                    "yearsInBusiness": {
+                        "type": "integer",
+                        "example": 5
+                    }
+                }
+            },
+            "RiskProfile": {
+                "type": "object",
+                "properties": {
+                    "overallScore": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 100,
+                        "example": 72
+                    },
+                    "riskLevel": {
+                        "type": "string",
+                        "enum": [
+                            "LOW",
+                            "MEDIUM",
+                            "HIGH",
+                            "VERY_HIGH"
+                        ]
+                    },
+                    "yearsInBusiness": {
+                        "type": "integer"
+                    },
+                    "claimsRatio": {
+                        "type": "number"
+                    },
+                    "bonusMalus": {
+                        "type": "number"
+                    }
+                }
+            },
+            "Policy": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "policyNumber": {
+                        "type": "string",
+                        "example": "OCPD/2024/001234"
+                    },
+                    "clientId": {
+                        "type": "string"
+                    },
+                    "status": {
+                        "type": "string",
+                        "enum": [
+                            "DRAFT",
+                            "QUOTED",
+                            "ACTIVE",
+                            "EXPIRED",
+                            "CANCELLED"
+                        ]
+                    },
+                    "sumInsured": {
+                        "type": "number",
+                        "example": 500000
+                    },
+                    "totalPremium": {
+                        "type": "number",
+                        "example": 8800
+                    },
+                    "territorialScope": {
+                        "type": "string",
+                        "enum": [
+                            "POLAND",
+                            "EUROPE",
+                            "WORLD"
+                        ]
+                    },
+                    "validFrom": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "validTo": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "clauses": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/PolicyClause"
+                        }
+                    }
+                }
+            },
+            "PolicyInput": {
+                "type": "object",
+                "required": [
+                    "clientId",
+                    "sumInsured",
+                    "territorialScope"
+                ],
+                "properties": {
+                    "clientId": {
+                        "type": "string"
+                    },
+                    "sumInsured": {
+                        "type": "number"
+                    },
+                    "territorialScope": {
+                        "type": "string",
+                        "enum": [
+                            "POLAND",
+                            "EUROPE",
+                            "WORLD"
+                        ]
+                    },
+                    "clauses": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                }
+            },
+            "PolicyClause": {
+                "type": "object",
+                "properties": {
+                    "type": {
+                        "type": "string",
+                        "example": "GROSS_NEGLIGENCE"
+                    },
+                    "sublimit": {
+                        "type": "integer",
+                        "example": 100
+                    },
+                    "premium": {
+                        "type": "number",
+                        "example": 704
+                    }
+                }
+            },
+            "PolicyStats": {
+                "type": "object",
+                "properties": {
+                    "active": {
+                        "type": "integer"
+                    },
+                    "expired": {
+                        "type": "integer"
+                    },
+                    "totalPremium": {
+                        "type": "number"
+                    }
+                }
+            },
+            "Quote": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "clientNIP": {
+                        "type": "string"
+                    },
+                    "requestedSumInsured": {
+                        "type": "number"
+                    },
+                    "requestedScope": {
+                        "type": "string"
+                    },
+                    "calculatedPremium": {
+                        "type": "number"
+                    },
+                    "status": {
+                        "type": "string"
+                    }
+                }
+            },
+            "QuoteInput": {
+                "type": "object",
+                "required": [
+                    "clientNIP",
+                    "requestedSumInsured",
+                    "requestedScope"
+                ],
+                "properties": {
+                    "clientNIP": {
+                        "type": "string"
+                    },
+                    "requestedSumInsured": {
+                        "type": "number"
+                    },
+                    "requestedScope": {
+                        "type": "string"
+                    }
+                }
+            },
+            "CalculationInput": {
+                "type": "object",
+                "required": [
+                    "sumInsured",
+                    "territorialScope"
+                ],
+                "properties": {
+                    "sumInsured": {
+                        "type": "number",
+                        "description": "Suma ubezpieczenia w PLN",
+                        "example": 300000
+                    },
+                    "territorialScope": {
+                        "type": "string",
+                        "enum": [
+                            "POLAND",
+                            "EUROPE",
+                            "WORLD"
+                        ]
+                    },
+                    "quickQuote": {
+                        "type": "boolean",
+                        "description": "True dla szybkiej wyceny"
+                    },
+                    "selectedClauses": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "example": [
+                            "GROSS_NEGLIGENCE",
+                            "FRIDGE"
+                        ]
+                    },
+                    "yearsInBusiness": {
+                        "type": "integer"
+                    },
+                    "fleetSize": {
+                        "type": "integer"
+                    },
+                    "apkData": {
+                        "type": "object"
+                    }
+                }
+            },
+            "CalculationResult": {
+                "type": "object",
+                "properties": {
+                    "type": {
+                        "type": "string",
+                        "enum": [
+                            "quick",
+                            "full"
+                        ]
+                    },
+                    "estimatedPremium": {
+                        "type": "number",
+                        "description": "Dla quick quote"
+                    },
+                    "range": {
+                        "type": "object",
+                        "properties": {
+                            "min": {
+                                "type": "number"
+                            },
+                            "max": {
+                                "type": "number"
+                            }
+                        }
+                    },
+                    "result": {
+                        "type": "object",
+                        "properties": {
+                            "breakdown": {
+                                "type": "object"
+                            },
+                            "riskLevel": {
+                                "type": "string"
+                            },
+                            "isAutoApproved": {
+                                "type": "boolean"
+                            },
+                            "referralReasons": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "Claim": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "claimNumber": {
+                        "type": "string",
+                        "example": "SZK/2024/00123"
+                    },
+                    "policyId": {
+                        "type": "string"
+                    },
+                    "clientId": {
+                        "type": "string"
+                    },
+                    "status": {
+                        "type": "string",
+                        "enum": [
+                            "REPORTED",
+                            "UNDER_REVIEW",
+                            "APPROVED",
+                            "REJECTED",
+                            "PAID"
+                        ]
+                    },
+                    "claimedAmount": {
+                        "type": "number"
+                    },
+                    "paidAmount": {
+                        "type": "number"
+                    },
+                    "description": {
+                        "type": "string"
+                    },
+                    "incidentDate": {
+                        "type": "string",
+                        "format": "date-time"
+                    }
+                }
+            },
+            "ClaimInput": {
+                "type": "object",
+                "required": [
+                    "policyId",
+                    "clientId",
+                    "description",
+                    "claimedAmount"
+                ],
+                "properties": {
+                    "policyId": {
+                        "type": "string"
+                    },
+                    "clientId": {
+                        "type": "string"
+                    },
+                    "description": {
+                        "type": "string"
+                    },
+                    "claimedAmount": {
+                        "type": "number"
+                    },
+                    "incidentDate": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "location": {
+                        "type": "string"
+                    }
+                }
+            },
+            "ClaimStats": {
+                "type": "object",
+                "properties": {
+                    "open": {
+                        "type": "integer"
+                    },
+                    "paid": {
+                        "type": "integer"
+                    },
+                    "totalClaimed": {
+                        "type": "number"
+                    },
+                    "totalPaid": {
+                        "type": "number"
+                    }
+                }
+            }
+        },
+        "responses": {
+            "BadRequest": {
+                "description": "Nieprawidłowe dane wejściowe",
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "error": {
+                                    "type": "string",
+                                    "example": "Required field missing"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "NotFound": {
+                "description": "Zasób nie znaleziony",
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "error": {
+                                    "type": "string",
+                                    "example": "Resource not found"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
