@@ -52,25 +52,34 @@ export async function POST(request: NextRequest) {
         }
 
         // In a real app, we would save to database
+        // For demo purposes, we add to mock data (persists during server session)
         const newClient = {
             id: `client-${Date.now()}`,
-            ...body,
+            nip: body.nip,
+            name: body.name,
+            email: body.email,
+            phone: body.phone || '',
+            brokerId: 'broker-1', // Default broker ID for demo
             createdAt: new Date(),
             updatedAt: new Date(),
-            fleet: [],
+            regonData: body.regonData || null,
+            fleet: body.fleet || [],
             claimsHistory: [],
             riskProfile: body.riskProfile || {
                 overallScore: 70,
-                riskLevel: 'MEDIUM',
+                riskLevel: 'MEDIUM' as const,
                 yearsInBusiness: body.yearsInBusiness || 1,
                 claimsRatio: 0,
                 bonusMalus: 0,
                 transportTypes: [],
-                mainRoutes: ['POLAND'],
+                mainRoutes: ['POLAND'] as ('POLAND' | 'EUROPE' | 'WORLD')[],
                 hasADRCertificate: false,
                 hasTAPACertificate: false,
             },
         };
+
+        // Add to mock data for demo persistence
+        mockClients.push(newClient as typeof mockClients[0]);
 
         return NextResponse.json(newClient, { status: 201 });
     } catch (error) {

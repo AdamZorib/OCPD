@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import {
     Search,
@@ -61,12 +61,30 @@ const riskOptions = [
 ];
 
 export default function ClientsPage() {
+    const [clients, setClients] = useState<typeof mockClients>([]);
+    const [isLoading, setIsLoading] = useState(true);
     const [search, setSearch] = useState('');
     const [scopeFilter, setScopeFilter] = useState('');
     const [riskFilter, setRiskFilter] = useState('');
 
+    useEffect(() => {
+        const fetchClients = async () => {
+            try {
+                const response = await fetch('/api/clients');
+                const data = await response.json();
+                setClients(data.data);
+            } catch (error) {
+                console.error('Failed to fetch clients:', error);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        fetchClients();
+    }, []);
+
     const filteredClients = useMemo(() => {
-        return mockClients.filter((client) => {
+        return clients.filter((client) => {
             // Search filter
             const searchLower = search.toLowerCase();
             const matchesSearch =
@@ -81,9 +99,10 @@ export default function ClientsPage() {
             // Risk filter
             const matchesRisk = !riskFilter || client.riskProfile.riskLevel === riskFilter;
 
-            return matchesSearch && matchesScope && matchesRisk;
+            // Strict boolean check since this is a filter function
+            return Boolean(matchesSearch && matchesScope && matchesRisk);
         });
-    }, [search, scopeFilter, riskFilter]);
+    }, [clients, search, scopeFilter, riskFilter]);
 
     return (
         <div className={styles.page}>
