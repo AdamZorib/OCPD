@@ -1,0 +1,257 @@
+.page {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--spacing-xl);
+    background: linear-gradient(135deg, var(--color-bg-secondary) 0%, var(--color-bg-primary) 100%);
+}
+
+.container {
+    width: 100%;
+    max-width: 480px;
+}
+
+.header {
+    text-align: center;
+    margin-bottom: var(--spacing-xl);
+}
+
+.logo {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 72px;
+    height: 72px;
+    background: linear-gradient(135deg, var(--color-accent-primary), var(--color-accent-secondary));
+    border-radius: var(--radius-xl);
+    color: white;
+    margin-bottom: var(--spacing-md);
+}
+
+.header h1 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--color-text-primary);
+    margin: 0 0 var(--spacing-xs) 0;
+}
+
+.header p {
+    color: var(--color-text-secondary);
+    margin: 0;
+}
+
+.card {
+    animation: fadeIn var(--transition-base) ease-out;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+}
+
+.error {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-md);
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid var(--color-danger, #ef4444);
+    border-radius: var(--radius-md);
+    color: var(--color-danger, #ef4444);
+    font-size: 0.875rem;
+}
+
+.field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+}
+
+.field label {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--color-text-primary);
+}
+
+.inputWrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.inputIcon {
+    position: absolute;
+    left: var(--spacing-md);
+    color: var(--color-text-tertiary);
+    pointer-events: none;
+}
+
+.inputWrapper input {
+    padding-left: calc(var(--spacing-md) + 24px);
+}
+
+.passwordToggle {
+    position: absolute;
+    right: var(--spacing-sm);
+    padding: var(--spacing-xs);
+    background: transparent;
+    border: none;
+    color: var(--color-text-tertiary);
+    cursor: pointer;
+    transition: color var(--transition-fast);
+}
+
+.passwordToggle:hover {
+    color: var(--color-text-primary);
+}
+
+.submitButton {
+    width: 100%;
+    margin-top: var(--spacing-sm);
+}
+
+.divider {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+    margin: var(--spacing-lg) 0;
+}
+
+.divider::before,
+.divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--color-border);
+}
+
+.divider span {
+    font-size: 0.8125rem;
+    color: var(--color-text-tertiary);
+}
+
+.quickLogin {
+    text-align: center;
+}
+
+.quickLogin h3 {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--color-text-secondary);
+    margin: 0 0 var(--spacing-md) 0;
+}
+
+.roleGrid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--spacing-md);
+}
+
+.roleButton {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--spacing-xs);
+    padding: var(--spacing-lg);
+    background: var(--color-bg-tertiary);
+    border: 2px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.roleButton:hover {
+    background: var(--color-bg-elevated);
+    transform: translateY(-2px);
+}
+
+.roleName {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+}
+
+.roleDesc {
+    font-size: 0.6875rem;
+    color: var(--color-text-tertiary);
+    text-align: center;
+    line-height: 1.4;
+}
+
+.demoToggle {
+    display: block;
+    width: 100%;
+    margin-top: var(--spacing-lg);
+    padding: var(--spacing-sm);
+    background: transparent;
+    border: none;
+    font-size: 0.8125rem;
+    color: var(--color-text-tertiary);
+    cursor: pointer;
+    transition: color var(--transition-fast);
+}
+
+.demoToggle:hover {
+    color: var(--color-text-secondary);
+}
+
+.demoAccounts {
+    margin-top: var(--spacing-md);
+    padding: var(--spacing-md);
+    background: var(--color-bg-tertiary);
+    border-radius: var(--radius-md);
+    overflow-x: auto;
+}
+
+.demoAccounts table {
+    width: 100%;
+    font-size: 0.75rem;
+    border-collapse: collapse;
+}
+
+.demoAccounts th {
+    text-align: left;
+    padding: var(--spacing-xs) var(--spacing-sm);
+    color: var(--color-text-tertiary);
+    font-weight: 500;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.demoAccounts td {
+    padding: var(--spacing-xs) var(--spacing-sm);
+    color: var(--color-text-secondary);
+}
+
+.demoAccounts tr:not(:last-child) td {
+    border-bottom: 1px solid var(--color-border);
+}
+
+.footer {
+    margin-top: var(--spacing-lg);
+    text-align: center;
+    font-size: 0.75rem;
+    color: var(--color-text-tertiary);
+}
+
+.footer a {
+    color: var(--color-text-secondary);
+    text-decoration: none;
+}
+
+.footer a:hover {
+    text-decoration: underline;
+}

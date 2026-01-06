@@ -1,8 +1,8 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { AlertTriangle, Search, Filter } from 'lucide-react';
-import { Card, Badge, Input, Select } from '@/components/ui';
-import { mockClaims } from '@/lib/mock-data';
+import { Card, Badge, Input, Select, Button } from '@/components/ui';
 import styles from './page.module.css';
 
 const statusLabels: Record<string, string> = {
@@ -31,15 +31,55 @@ const formatCurrency = (value: number) => {
     }).format(value);
 };
 
-const formatDate = (date: Date) => {
+const formatDate = (date: Date | string | undefined) => {
+    if (!date) return '—';
     return new Intl.DateTimeFormat('pl-PL', {
         day: '2-digit',
         month: '2-digit',
         year: 'numeric',
-    }).format(date);
+    }).format(new Date(date));
 };
 
 export default function ClaimsPage() {
+    const [claims, setClaims] = useState<any[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [search, setSearch] = useState('');
+
+    useEffect(() => {
+        const fetchClaims = async () => {
+            try {
+                const res = await fetch('/api/claims');
+                const data = await res.json();
+                setClaims(Array.isArray(data.data) ? data.data : []);
+            } catch (err) {
+                console.error('Failed to fetch claims:', err);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+        fetchClaims();
+    }, []);
+
+    const filteredClaims = claims.filter(claim => {
+        const searchLower = search.toLowerCase();
+        return (
+            claim.claimNumber.toLowerCase().includes(searchLower) ||
+            (claim.clientName && claim.clientName.toLowerCase().includes(searchLower)) ||
+            (claim.description && claim.description.toLowerCase().includes(searchLower))
+        );
+    });
+
+    if (isLoading) {
+        return (
+            <div className={styles.page}>
+                <header className={styles.header}>
+                    <h1 className={styles.title}>Szkody</h1>
+                    <p className={styles.subtitle}>Ładowanie danych...</p>
+                </header>
+            </div>
+        );
+    }
+
     return (
         <div className={styles.page}>
             <header className={styles.header}>
@@ -53,23 +93,28 @@ export default function ClaimsPage() {
                 <Input
                     placeholder="Szukaj po numerze szkody, kliencie..."
                     leftIcon={<Search size={18} />}
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
                 />
             </Card>
 
             <div className={styles.claimsGrid}>
-                {mockClaims.map((claim) => (
+                {filteredClaims.map((claim) => (
                     <Card key={claim.id} className={styles.claimCard} hoverable>
                         <div className={styles.claimHeader}>
                             <div className={styles.claimIcon}>
                                 <AlertTriangle size={24} />
                             </div>
                             <Badge variant={statusVariant(claim.status)}>
-                                {statusLabels[claim.status]}
+                                {statusLabels[claim.status] || claim.status}
                             </Badge>
                         </div>
 
                         <div className={styles.claimInfo}>
-                            <span className={styles.claimNumber}>{claim.claimNumber}</span>
+                            <div className={styles.claimMetaHeader}>
+                                <span className={styles.claimNumber}>{claim.claimNumber}</span>
+                                {claim.clientName && <span className={styles.clientName}>{claim.clientName}</span>}
+                            </div>
                             <p className={styles.claimDesc}>{claim.description}</p>
                         </div>
 
@@ -106,6 +151,16 @@ export default function ClaimsPage() {
                     </Card>
                 ))}
             </div>
+
+            {filteredClaims.length === 0 && (
+                <Card className={styles.emptyState}>
+                    <div className={styles.emptyIcon}>
+                        <Search size={48} />
+                    </div>
+                    <h3>Nie znaleziono szkód</h3>
+                    <p>Spróbuj zmienić kryteria wyszukiwania.</p>
+                </Card>
+            )}
         </div>
     );
 }

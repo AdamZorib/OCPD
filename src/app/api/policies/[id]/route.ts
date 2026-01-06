@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { mockPolicies } from '@/lib/mock-data';
+import { prisma } from '@/lib/prisma';
 
 // GET /api/policies/[id] - Get a single policy
 export async function GET(
@@ -7,16 +7,43 @@ export async function GET(
     { params }: { params: Promise<{ id: string }> }
 ) {
     const { id } = await params;
-    const policy = mockPolicies.find((p) => p.id === id);
 
-    if (!policy) {
-        return NextResponse.json(
-            { error: 'Policy not found' },
-            { status: 404 }
-        );
+    try {
+        const policy = await prisma.policy.findUnique({
+            where: { id },
+        });
+
+        if (!policy) {
+            return NextResponse.json(
+                { error: 'Policy not found' },
+                { status: 404 }
+            );
+        }
+
+        const client = await prisma.client.findUnique({
+            where: { id: policy.clientId },
+        });
+
+        return NextResponse.json({
+            ...policy,
+            clauses: policy.clausesJson ? JSON.parse(policy.clausesJson) : [],
+            client: client ? {
+                id: client.id,
+                name: client.name,
+                nip: client.nip,
+                email: client.email,
+                phone: client.phone,
+                regonData: client.regonDataJson ? JSON.parse(client.regonDataJson) : null,
+            } : {
+                id: policy.clientId,
+                name: policy.clientName,
+                nip: policy.clientNIP,
+            },
+        });
+    } catch (error) {
+        console.error('Error fetching policy:', error);
+        return NextResponse.json({ error: 'Failed to fetch policy' }, { status: 500 });
     }
-
-    return NextResponse.json(policy);
 }
 
 // PUT /api/policies/[id] - Update a policy
@@ -25,31 +52,46 @@ export async function PUT(
     { params }: { params: Promise<{ id: string }> }
 ) {
     const { id } = await params;
-    const policy = mockPolicies.find((p) => p.id === id);
-
-    if (!policy) {
-        return NextResponse.json(
-            { error: 'Policy not found' },
-            { status: 404 }
-        );
-    }
 
     try {
         const body = await request.json();
 
-        const updatedPolicy = {
-            ...policy,
-            ...body,
-            id: policy.id,
-            policyNumber: policy.policyNumber, // Prevent policy number from being changed
-            updatedAt: new Date(),
-        };
+        const updatedPolicy = await prisma.policy.update({
+            where: { id },
+            data: {
+                clientName: body.clientName,
+                status: body.status,
+                sumInsured: body.sumInsured,
+                territorialScope: body.territorialScope,
+                basePremium: body.basePremium,
+                clausesPremium: body.clausesPremium,
+                totalPremium: body.totalPremium,
+                clausesJson: body.clauses ? JSON.stringify(body.clauses) : undefined,
+                validFrom: body.validFrom ? new Date(body.validFrom) : undefined,
+                validTo: body.validTo ? new Date(body.validTo) : undefined,
+                issuedAt: body.issuedAt ? new Date(body.issuedAt) : undefined,
+                apkCompleted: body.apkCompleted,
+                ipidGenerated: body.ipidGenerated,
+                signatureStatus: body.signatureStatus,
+                signatureId: body.signatureId,
+                signedAt: body.signedAt ? new Date(body.signedAt) : undefined,
+            },
+        });
 
-        return NextResponse.json(updatedPolicy);
+        return NextResponse.json({
+            ...updatedPolicy,
+            clauses: updatedPolicy.clausesJson ? JSON.parse(updatedPolicy.clausesJson) : [],
+            client: {
+                id: updatedPolicy.clientId,
+                name: updatedPolicy.clientName,
+                nip: updatedPolicy.clientNIP,
+            },
+        });
     } catch (error) {
+        console.error('Error updating policy:', error);
         return NextResponse.json(
-            { error: 'Invalid request body' },
-            { status: 400 }
+            { error: 'Failed to update policy' },
+            { status: 500 }
         );
     }
 }
@@ -60,14 +102,6 @@ export async function PATCH(
     { params }: { params: Promise<{ id: string }> }
 ) {
     const { id } = await params;
-    const policy = mockPolicies.find((p) => p.id === id);
-
-    if (!policy) {
-        return NextResponse.json(
-            { error: 'Policy not found' },
-            { status: 404 }
-        );
-    }
 
     try {
         const body = await request.json();
@@ -87,17 +121,27 @@ export async function PATCH(
             );
         }
 
-        const updatedPolicy = {
-            ...policy,
-            status: body.status,
-            updatedAt: new Date(),
-        };
+        const updatedPolicy = await prisma.policy.update({
+            where: { id },
+            data: {
+                status: body.status,
+            },
+        });
 
-        return NextResponse.json(updatedPolicy);
+        return NextResponse.json({
+            ...updatedPolicy,
+            clauses: updatedPolicy.clausesJson ? JSON.parse(updatedPolicy.clausesJson) : [],
+            client: {
+                id: updatedPolicy.clientId,
+                name: updatedPolicy.clientName,
+                nip: updatedPolicy.clientNIP,
+            },
+        });
     } catch (error) {
+        console.error('Error updating policy status:', error);
         return NextResponse.json(
-            { error: 'Invalid request body' },
-            { status: 400 }
+            { error: 'Failed to update policy status' },
+            { status: 500 }
         );
     }
 }

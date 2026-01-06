@@ -591,4 +591,4 @@ MIT License - zobacz [LICENSE](LICENSE)
 
 ## 👥 Autorzy
 
-Zbudowane z ❤️ dla branży transportowej w Polsce.
+Adam B. Zbudowane z ❤️ dla branży transportowej w Polsce.

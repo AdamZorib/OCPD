@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect, useMemo } from 'react';
 import {
   FileText,
   Users,
@@ -24,14 +25,17 @@ import {
   Bar,
 } from 'recharts';
 import { Card, CardHeader, CardTitle, CardContent, Badge, Button } from '@/components/ui';
-import {
-  mockDashboardStats,
-  mockPolicies,
-  mockClaims,
-  mockQuotes,
-  mockPremiumHistory,
-} from '@/lib/mock-data';
 import styles from './page.module.css';
+
+// Premium history for charts (placeholder until API supports trends)
+const premiumHistory = [
+  { month: 'Sty', premium: 125000, claims: 45000 },
+  { month: 'Lut', premium: 142000, claims: 52000 },
+  { month: 'Mar', premium: 138000, claims: 48000 },
+  { month: 'Kwi', premium: 155000, claims: 65000 },
+  { month: 'Maj', premium: 148000, claims: 58000 },
+  { month: 'Cze', premium: 162000, claims: 42000 },
+];
 
 // Format currency
 const formatCurrency = (value: number) => {
@@ -84,10 +88,39 @@ const statusLabels: Record<string, string> = {
 };
 
 export default function Dashboard() {
-  const stats = mockDashboardStats;
-  const recentPolicies = mockPolicies.slice(0, 5);
-  const openClaims = mockClaims.filter(c => c.status === 'UNDER_REVIEW' || c.status === 'REPORTED');
-  const pendingQuotes = mockQuotes.filter(q => q.status !== 'ACCEPTED' && q.status !== 'REJECTED');
+  const [stats, setStats] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const res = await fetch('/api/dashboard');
+        const data = await res.json();
+        setStats(data);
+      } catch (err) {
+        console.error('Failed to fetch dashboard stats:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchStats();
+  }, []);
+
+  if (isLoading || !stats) {
+    return (
+      <div className={styles.dashboard}>
+        <header className={styles.header}>
+          <h1 className={styles.title}>Dashboard</h1>
+          <p className={styles.subtitle}>Ładowanie danych...</p>
+        </header>
+      </div>
+    );
+  }
+
+  const { recentActivity } = stats;
+  const recentPolicies = recentActivity?.newPolicies || [];
+  const openClaims = recentActivity?.openClaimsList || [];
+  const pendingQuotes = recentActivity?.pendingQuotesList || [];
 
   return (
     <div className={styles.dashboard}>
@@ -170,7 +203,7 @@ export default function Dashboard() {
           <CardContent>
             <div className={styles.chartContainer}>
               <ResponsiveContainer width="100%" height={300}>
-                <AreaChart data={mockPremiumHistory}>
+                <AreaChart data={premiumHistory}>
                   <defs>
                     <linearGradient id="premiumGradient" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
@@ -199,7 +232,7 @@ export default function Dashboard() {
                       borderRadius: '8px',
                     }}
                     labelStyle={{ color: 'var(--color-text-primary)' }}
-                    formatter={(value: number) => formatCurrency(value)}
+                    formatter={(value) => value !== undefined ? formatCurrency(value as number) : ''}
                   />
                   <Area
                     type="monotone"
@@ -253,7 +286,7 @@ export default function Dashboard() {
                       borderRadius: '8px',
                     }}
                     labelStyle={{ color: 'var(--color-text-primary)' }}
-                    formatter={(value: number) => formatCurrency(value)}
+                    formatter={(value) => value !== undefined ? formatCurrency(value as number) : ''}
                   />
                   <Bar
                     dataKey="premium"
@@ -290,23 +323,23 @@ export default function Dashboard() {
                 </tr>
               </thead>
               <tbody>
-                {recentPolicies.map((policy) => (
+                {recentPolicies.map((policy: any) => (
                   <tr key={policy.id}>
                     <td>
                       <Link href={`/policies/${policy.id}`} className={styles.policyLink}>
                         {policy.policyNumber}
                       </Link>
                     </td>
-                    <td className={styles.clientName}>{policy.client?.name}</td>
-                    <td>{formatCurrency(policy.totalPremium)}</td>
+                    <td className={styles.clientName}>{policy.clientName}</td>
+                    <td>{formatCurrency(policy.premium)}</td>
                     <td>
-                      <span className={daysUntilExpiry(policy.validTo) <= 30 ? styles.expiringWarning : ''}>
-                        {formatDate(policy.validTo)}
+                      <span className={policy.validTo && daysUntilExpiry(new Date(policy.validTo)) <= 30 ? styles.expiringWarning : ''}>
+                        {policy.validTo ? formatDate(new Date(policy.validTo)) : '-'}
                       </span>
                     </td>
                     <td>
-                      <Badge variant={getStatusVariant(policy.status)} dot>
-                        {statusLabels[policy.status]}
+                      <Badge variant={getStatusVariant(policy.status || 'ACTIVE')} dot>
+                        {statusLabels[policy.status || 'ACTIVE']}
                       </Badge>
                     </td>
                   </tr>
@@ -326,14 +359,14 @@ export default function Dashboard() {
               </Link>
             </div>
             <div className={styles.listContent}>
-              {openClaims.length > 0 ? openClaims.map((claim) => (
+              {openClaims.length > 0 ? openClaims.map((claim: any) => (
                 <div key={claim.id} className={styles.listItem}>
                   <div className={styles.listItemMain}>
                     <span className={styles.listItemTitle}>{claim.claimNumber}</span>
-                    <span className={styles.listItemSubtitle}>{claim.description.slice(0, 50)}...</span>
+                    <span className={styles.listItemSubtitle}>{claim.description?.slice(0, 50)}...</span>
                   </div>
                   <div className={styles.listItemEnd}>
-                    <span className={styles.listItemValue}>{formatCurrency(claim.claimedAmount)}</span>
+                    <span className={styles.listItemValue}>{formatCurrency(claim.amount)}</span>
                     <Badge variant={getStatusVariant(claim.status)} size="sm">
                       {statusLabels[claim.status]}
                     </Badge>
@@ -353,17 +386,17 @@ export default function Dashboard() {
               </Link>
             </div>
             <div className={styles.listContent}>
-              {pendingQuotes.map((quote) => (
+              {pendingQuotes.map((quote: any) => (
                 <div key={quote.id} className={styles.listItem}>
                   <div className={styles.listItemMain}>
                     <span className={styles.listItemTitle}>NIP: {quote.clientNIP}</span>
                     <span className={styles.listItemSubtitle}>
-                      {formatCurrency(quote.requestedSumInsured)} • {quote.requestedScope}
+                      {formatCurrency(quote.sumInsured)}
                     </span>
                   </div>
                   <div className={styles.listItemEnd}>
-                    {quote.calculatedPremium && (
-                      <span className={styles.listItemValue}>{formatCurrency(quote.calculatedPremium)}</span>
+                    {quote.premium && (
+                      <span className={styles.listItemValue}>{formatCurrency(quote.premium)}</span>
                     )}
                     <Badge variant={getStatusVariant(quote.status)} size="sm">
                       {statusLabels[quote.status]}

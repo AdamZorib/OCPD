@@ -1,6 +1,6 @@
 'use client';
 
-import { use } from 'react';
+import { useState, useEffect, use } from 'react';
 import Link from 'next/link';
 import {
     ArrowLeft,
@@ -32,7 +32,6 @@ import {
     TableHead,
     TableCell,
 } from '@/components/ui';
-import { mockClients, mockPolicies, mockClaims } from '@/lib/mock-data';
 import styles from './page.module.css';
 
 const riskLevelLabels: Record<string, string> = {
@@ -60,19 +59,45 @@ const formatCurrency = (value: number) => {
     }).format(value);
 };
 
-const formatDate = (date: Date) => {
+const formatDate = (date: Date | string | undefined) => {
+    if (!date) return '—';
     return new Intl.DateTimeFormat('pl-PL', {
         day: '2-digit',
         month: '2-digit',
         year: 'numeric',
-    }).format(date);
+    }).format(new Date(date));
 };
 
 export default function ClientDetailPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = use(params);
-    const client = mockClients.find((c) => c.id === id);
-    const clientPolicies = mockPolicies.filter((p) => p.clientId === id);
-    const clientClaims = mockClaims.filter((c) => c.clientId === id);
+    const [client, setClient] = useState<any>(null);
+    const [isLoading, setIsLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchClient = async () => {
+            try {
+                const res = await fetch(`/api/clients/${id}`);
+                if (!res.ok) throw new Error('Client not found');
+                const data = await res.json();
+                setClient(data);
+            } catch (err) {
+                console.error('Failed to fetch client:', err);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+        fetchClient();
+    }, [id]);
+
+    if (isLoading) {
+        return (
+            <div className={styles.page}>
+                <header className={styles.header}>
+                    <h1 className={styles.title}>Wczytywanie...</h1>
+                </header>
+            </div>
+        );
+    }
 
     if (!client) {
         return (
@@ -90,9 +115,12 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
         );
     }
 
-    const activePolicies = clientPolicies.filter((p) => p.status === 'ACTIVE');
-    const totalPremium = activePolicies.reduce((sum, p) => sum + p.totalPremium, 0);
-    const openClaims = clientClaims.filter((c) => c.status === 'UNDER_REVIEW' || c.status === 'REPORTED');
+    const clientPolicies = client.policies || [];
+    const clientClaims = client.claims || [];
+    const activePolicies = clientPolicies.filter((p: any) => p.status === 'ACTIVE');
+    const totalPremium = activePolicies.reduce((sum: number, p: any) => sum + (p.totalPremium || 0), 0);
+    const openClaims = clientClaims.filter((c: any) => c.status === 'UNDER_REVIEW' || c.status === 'REPORTED');
+    const riskProfile = client.riskProfile || { riskLevel: 'MEDIUM', overallScore: 50, yearsInBusiness: 0, claimsRatio: 0, mainRoutes: [], transportTypes: [] };
 
     return (
         <div className={styles.page}>
@@ -114,8 +142,8 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
                     </div>
                 </div>
                 <div className={styles.headerActions}>
-                    <Badge variant={riskLevelVariant(client.riskProfile.riskLevel)} size="md">
-                        Ryzyko: {riskLevelLabels[client.riskProfile.riskLevel]}
+                    <Badge variant={riskLevelVariant(riskProfile.riskLevel)} size="md">
+                        Ryzyko: {riskLevelLabels[riskProfile.riskLevel]}
                     </Badge>
                     <Button variant="secondary" leftIcon={<Edit size={18} />}>
                         Edytuj
@@ -158,13 +186,13 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
                     </div>
                 </Card>
                 <Card className={styles.statCard}>
-                    <div className={styles.statIcon} style={{ background: client.riskProfile.bonusMalus <= 0 ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)', color: client.riskProfile.bonusMalus <= 0 ? 'var(--color-success)' : 'var(--color-danger)' }}>
-                        {client.riskProfile.bonusMalus <= 0 ? <TrendingDown size={24} /> : <TrendingUp size={24} />}
+                    <div className={styles.statIcon} style={{ background: (riskProfile.bonusMalus || 0) <= 0 ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)', color: (riskProfile.bonusMalus || 0) <= 0 ? 'var(--color-success)' : 'var(--color-danger)' }}>
+                        {(riskProfile.bonusMalus || 0) <= 0 ? <TrendingDown size={24} /> : <TrendingUp size={24} />}
                     </div>
                     <div className={styles.statContent}>
                         <span className={styles.statLabel}>Bonus/Malus</span>
-                        <span className={styles.statValue} data-positive={client.riskProfile.bonusMalus <= 0}>
-                            {client.riskProfile.bonusMalus > 0 ? '+' : ''}{client.riskProfile.bonusMalus}%
+                        <span className={styles.statValue} data-positive={(riskProfile.bonusMalus || 0) <= 0}>
+                            {riskProfile.bonusMalus > 0 ? '+' : ''}{riskProfile.bonusMalus || 0}%
                         </span>
                     </div>
                 </Card>
@@ -207,11 +235,11 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
                                 )}
                                 <div className={styles.infoItem}>
                                     <span className={styles.infoLabel}>Telefon</span>
-                                    <span className={styles.infoValue}>{client.phone}</span>
+                                    <span className={styles.infoValue}>{client.phone || '—'}</span>
                                 </div>
                                 <div className={styles.infoItem}>
                                     <span className={styles.infoLabel}>Email</span>
-                                    <span className={styles.infoValue}>{client.email}</span>
+                                    <span className={styles.infoValue}>{client.email || '—'}</span>
                                 </div>
                             </div>
                         </CardContent>
@@ -237,7 +265,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {clientPolicies.map((policy) => (
+                                    {clientPolicies.map((policy: any) => (
                                         <TableRow key={policy.id}>
                                             <TableCell>
                                                 <Link href={`/policies/${policy.id}`} className={styles.policyLink}>
@@ -276,40 +304,40 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
                         </CardHeader>
                         <CardContent>
                             <div className={styles.riskScore}>
-                                <div className={styles.scoreCircle} data-level={client.riskProfile.riskLevel.toLowerCase()}>
-                                    <span className={styles.scoreValue}>{client.riskProfile.overallScore}</span>
+                                <div className={styles.scoreCircle} data-level={(riskProfile.riskLevel || 'MEDIUM').toLowerCase()}>
+                                    <span className={styles.scoreValue}>{riskProfile.overallScore || 0}</span>
                                     <span className={styles.scoreLabel}>/ 100</span>
                                 </div>
-                                <Badge variant={riskLevelVariant(client.riskProfile.riskLevel)}>
-                                    {riskLevelLabels[client.riskProfile.riskLevel]}
+                                <Badge variant={riskLevelVariant(riskProfile.riskLevel)}>
+                                    {riskLevelLabels[riskProfile.riskLevel]}
                                 </Badge>
                             </div>
 
                             <div className={styles.riskDetails}>
                                 <div className={styles.riskItem}>
                                     <span className={styles.riskLabel}>Lata w branży</span>
-                                    <span className={styles.riskValue}>{client.riskProfile.yearsInBusiness}</span>
+                                    <span className={styles.riskValue}>{riskProfile.yearsInBusiness}</span>
                                 </div>
                                 <div className={styles.riskItem}>
                                     <span className={styles.riskLabel}>Szkodowość</span>
-                                    <span className={styles.riskValue}>{(client.riskProfile.claimsRatio * 100).toFixed(0)}%</span>
+                                    <span className={styles.riskValue}>{((riskProfile.claimsRatio || 0) * 100).toFixed(0)}%</span>
                                 </div>
                                 <div className={styles.riskItem}>
                                     <span className={styles.riskLabel}>Zakres działania</span>
-                                    <span className={styles.riskValue}>{client.riskProfile.mainRoutes.join(', ')}</span>
+                                    <span className={styles.riskValue}>{Array.isArray(riskProfile.mainRoutes) ? riskProfile.mainRoutes.join(', ') : '—'}</span>
                                 </div>
                                 <div className={styles.riskItem}>
                                     <span className={styles.riskLabel}>Typy transportu</span>
-                                    <span className={styles.riskValue}>{client.riskProfile.transportTypes.join(', ')}</span>
+                                    <span className={styles.riskValue}>{Array.isArray(riskProfile.transportTypes) ? riskProfile.transportTypes.join(', ') : '—'}</span>
                                 </div>
                             </div>
 
                             <div className={styles.certificates}>
-                                <div className={styles.certItem} data-active={client.riskProfile.hasADRCertificate}>
+                                <div className={styles.certItem} data-active={riskProfile.hasADRCertificate}>
                                     <Shield size={18} />
                                     <span>Certyfikat ADR</span>
                                 </div>
-                                <div className={styles.certItem} data-active={client.riskProfile.hasTAPACertificate}>
+                                <div className={styles.certItem} data-active={riskProfile.hasTAPACertificate}>
                                     <Award size={18} />
                                     <span>Certyfikat TAPA</span>
                                 </div>
@@ -325,11 +353,11 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
                         <CardContent>
                             {clientClaims.length > 0 ? (
                                 <div className={styles.claimsList}>
-                                    {clientClaims.slice(0, 3).map((claim) => (
+                                    {clientClaims.slice(0, 3).map((claim: any) => (
                                         <div key={claim.id} className={styles.claimItem}>
                                             <div className={styles.claimMain}>
                                                 <span className={styles.claimNumber}>{claim.claimNumber}</span>
-                                                <span className={styles.claimDesc}>{claim.description.slice(0, 60)}...</span>
+                                                <span className={styles.claimDesc}>{claim.description?.slice(0, 60)}...</span>
                                             </div>
                                             <div className={styles.claimEnd}>
                                                 <span className={styles.claimAmount}>{formatCurrency(claim.claimedAmount)}</span>

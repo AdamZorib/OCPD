@@ -29,6 +29,60 @@ const EXPERIENCE_DISCOUNTS: Record<number, number> = {
     15: 0.85,
 };
 
+// ========== NEW: Cargo Type Multipliers ==========
+export type CargoType =
+    | 'STANDARD'
+    | 'ELECTRONICS'
+    | 'ADR_DANGEROUS'
+    | 'REFRIGERATED'
+    | 'FOOD_DRY'
+    | 'BULK_MATERIALS'
+    | 'ALCOHOL_TOBACCO'
+    | 'PHARMACEUTICALS'
+    | 'AUTOMOTIVE_PARTS'
+    | 'TEXTILES';
+
+export const CARGO_TYPE_MULTIPLIERS: Record<CargoType, { multiplier: number; namePL: string; nameEN: string }> = {
+    STANDARD: { multiplier: 1.0, namePL: 'Standardowe (materiały budowlane, meble)', nameEN: 'Standard (construction, furniture)' },
+    ELECTRONICS: { multiplier: 2.0, namePL: 'Elektronika (RTV, AGD, komputery)', nameEN: 'Electronics (consumer electronics, computers)' },
+    ADR_DANGEROUS: { multiplier: 1.3, namePL: 'Towary niebezpieczne (ADR)', nameEN: 'Dangerous goods (ADR)' },
+    REFRIGERATED: { multiplier: 1.2, namePL: 'Chłodnicze (żywność mrożona)', nameEN: 'Refrigerated (frozen food)' },
+    FOOD_DRY: { multiplier: 1.0, namePL: 'Spożywcze suche (opakowane)', nameEN: 'Dry food (packaged)' },
+    BULK_MATERIALS: { multiplier: 0.8, namePL: 'Sypkie/masowe (kruszywo, zboże)', nameEN: 'Bulk materials (gravel, grain)' },
+    ALCOHOL_TOBACCO: { multiplier: 1.8, namePL: 'Alkohol i wyroby tytoniowe', nameEN: 'Alcohol and tobacco' },
+    PHARMACEUTICALS: { multiplier: 1.5, namePL: 'Farmaceutyki i kosmetyki', nameEN: 'Pharmaceuticals and cosmetics' },
+    AUTOMOTIVE_PARTS: { multiplier: 1.3, namePL: 'Części samochodowe', nameEN: 'Automotive parts' },
+    TEXTILES: { multiplier: 1.1, namePL: 'Tekstylia i odzież', nameEN: 'Textiles and clothing' },
+};
+
+// ========== NEW: Subcontractor Percentage Factor ==========
+export const getSubcontractorModifier = (subcontractorPercent: number): number => {
+    if (subcontractorPercent === 0) return 1.0;
+    if (subcontractorPercent <= 25) return 1.05;  // +5%
+    if (subcontractorPercent <= 50) return 1.10;  // +10%
+    if (subcontractorPercent <= 75) return 1.15;  // +15%
+    return 1.20;  // +20% for majority subcontracting
+};
+
+// ========== NEW: Payment Installment Surcharge ==========
+export type PaymentInstallments = 1 | 2 | 4;
+
+export const PAYMENT_INSTALLMENT_SURCHARGE: Record<PaymentInstallments, number> = {
+    1: 0,     // No surcharge for single payment
+    2: 0.03,  // +3% for 2 installments
+    4: 0.05,  // +5% for 4 installments
+};
+
+// ========== NEW: Deductible Adjustment ==========
+export type DeductibleLevel = 'ZERO' | 'STANDARD' | 'ELEVATED' | 'HIGH';
+
+export const DEDUCTIBLE_OPTIONS: Record<DeductibleLevel, { amount: number; modifier: number; labelPL: string }> = {
+    ZERO: { amount: 0, modifier: 1.10, labelPL: 'Brak franszyzy (+10%)' },
+    STANDARD: { amount: 1000, modifier: 1.0, labelPL: '1 000 PLN (standard)' },
+    ELEVATED: { amount: 2500, modifier: 0.95, labelPL: '2 500 PLN (-5%)' },
+    HIGH: { amount: 5000, modifier: 0.90, labelPL: '5 000 PLN (-10%)' },
+};
+
 // Bonus-malus based on claims history
 function getBonusMalusModifier(claimsLast3Years: number, monthlyShipments: number): number {
     const totalShipments = monthlyShipments * 36; // 3 years
@@ -91,10 +145,23 @@ export interface CalculationInput {
     apkData: Partial<APKData>;
     yearsInBusiness: number;
     fleetSize: number;
+    // ========== NEW: Enhanced pricing inputs ==========
+    cargoType?: CargoType;
+    subcontractorPercent?: number;
+    paymentInstallments?: PaymentInstallments;
+    deductibleLevel?: DeductibleLevel;
+    selectedCountries?: string[];
+    countrySurchargePercent?: number;
 }
 
 export interface CalculationResult {
-    breakdown: PremiumBreakdown;
+    breakdown: PremiumBreakdown & {
+        cargoTypeModifier?: number;
+        subcontractorModifier?: number;
+        deductibleModifier?: number;
+        countrySurcharge?: number;
+        installmentSurcharge?: number;
+    };
     riskLevel: RiskLevel;
     isAutoApproved: boolean;
     referralReasons: string[];
@@ -109,6 +176,12 @@ export function calculatePremium(input: CalculationInput): CalculationResult {
         apkData,
         yearsInBusiness,
         fleetSize,
+        // New enhanced inputs
+        cargoType = 'STANDARD',
+        subcontractorPercent = 0,
+        paymentInstallments = 1,
+        deductibleLevel = 'STANDARD',
+        countrySurchargePercent = 0,
     } = input;
 
     const referralReasons: string[] = [];
@@ -136,15 +209,31 @@ export function calculatePremium(input: CalculationInput): CalculationResult {
     else if (fleetSize >= 20) fleetDiscount = 0.90;
     else if (fleetSize >= 10) fleetDiscount = 0.95;
 
-    // Calculate adjusted base premium
+    // ========== NEW Step 6: Cargo type modifier ==========
+    const cargoTypeModifier = CARGO_TYPE_MULTIPLIERS[cargoType]?.multiplier ?? 1.0;
+
+    // ========== NEW Step 7: Subcontractor modifier ==========
+    const subcontractorModifier = getSubcontractorModifier(subcontractorPercent);
+
+    // ========== NEW Step 8: Deductible modifier ==========
+    const deductibleModifier = DEDUCTIBLE_OPTIONS[deductibleLevel]?.modifier ?? 1.0;
+
+    // ========== NEW Step 9: Country surcharge ==========
+    const countrySurcharge = 1 + (countrySurchargePercent / 100);
+
+    // Calculate adjusted base premium with all modifiers
     const adjustedBasePremium =
         basePremium *
         riskModifier *
         experienceModifier *
         bonusMalusModifier *
-        fleetDiscount;
+        fleetDiscount *
+        cargoTypeModifier *
+        subcontractorModifier *
+        deductibleModifier *
+        countrySurcharge;
 
-    // Step 6: Calculate clause premiums
+    // Step 10: Calculate clause premiums
     const clausesPremiumMap: { [key in ClauseType]?: number } = {};
     let totalClausesPremium = 0;
 
@@ -154,15 +243,20 @@ export function calculatePremium(input: CalculationInput): CalculationResult {
         totalClausesPremium += clausePremium;
     }
 
-    // Step 7: Calculate total premium
+    // Step 11: Calculate subtotal
     const scopeModifier = riskModifier;
-    const totalPremium = adjustedBasePremium + totalClausesPremium;
+    let totalPremium = adjustedBasePremium + totalClausesPremium;
 
-    // Step 8: Apply minimum premium
+    // ========== NEW Step 12: Payment installment surcharge ==========
+    const installmentSurchargeRate = PAYMENT_INSTALLMENT_SURCHARGE[paymentInstallments] ?? 0;
+    const installmentSurcharge = totalPremium * installmentSurchargeRate;
+    totalPremium += installmentSurcharge;
+
+    // Step 13: Apply minimum premium
     const minimumPremium = getMinimumPremium(territorialScope, selectedClauses.length);
     const finalPremium = Math.max(totalPremium, minimumPremium);
 
-    // Step 9: Determine if auto-approval is possible
+    // Step 14: Determine if auto-approval is possible
     let isAutoApproved = true;
 
     if (sumInsured > 2000000) {
@@ -190,6 +284,22 @@ export function calculatePremium(input: CalculationInput): CalculationResult {
         referralReasons.push('Znacząca nadwyżka szkodowości');
     }
 
+    // ========== NEW: Additional referral rules ==========
+    if (cargoType === 'ELECTRONICS' || cargoType === 'ALCOHOL_TOBACCO') {
+        isAutoApproved = false;
+        referralReasons.push('Towary wysokowartościowe wymagają akceptacji UW');
+    }
+
+    if (subcontractorPercent > 50) {
+        isAutoApproved = false;
+        referralReasons.push('Wysoki udział podwykonawców (>50%)');
+    }
+
+    if (countrySurchargePercent > 30) {
+        isAutoApproved = false;
+        referralReasons.push('Kraje podwyższonego ryzyka wymagają akceptacji UW');
+    }
+
     return {
         breakdown: {
             basePremium: Math.round(basePremium),
@@ -198,6 +308,12 @@ export function calculatePremium(input: CalculationInput): CalculationResult {
             bonusMalusModifier,
             clausesPremium: clausesPremiumMap,
             totalPremium: Math.round(finalPremium),
+            // New breakdown fields
+            cargoTypeModifier,
+            subcontractorModifier,
+            deductibleModifier,
+            countrySurcharge,
+            installmentSurcharge: Math.round(installmentSurcharge),
         },
         riskLevel,
         isAutoApproved,

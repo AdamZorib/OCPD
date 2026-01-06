@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
     ArrowLeft,
@@ -9,9 +10,12 @@ import {
     Building2,
     Shield,
     FileText,
-    Calculator,
-    AlertCircle,
     CheckCircle2,
+    ClipboardCheck,
+    Calculator,
+    Eye,
+    Trash2,
+    AlertCircle,
 } from 'lucide-react';
 import {
     Card,
@@ -23,9 +27,34 @@ import {
     Select,
     Badge,
 } from '@/components/ui';
-import { calculatePremium, CalculationInput, CalculationResult } from '@/lib/underwriting/calculator';
+import { Loader2, Search } from 'lucide-react';
+import { GusCompanyData } from '@/lib/gus/types';
+import {
+    calculatePremium,
+    CalculationInput,
+    CalculationResult,
+    CargoType,
+    CARGO_TYPE_MULTIPLIERS,
+    PaymentInstallments,
+    PAYMENT_INSTALLMENT_SURCHARGE,
+    DeductibleLevel,
+    DEDUCTIBLE_OPTIONS,
+} from '@/lib/underwriting/calculator';
 import { CLAUSE_DEFINITIONS } from '@/lib/clauses/definitions';
+import {
+    CONSENT_DEFINITIONS,
+    ConsentState,
+    getInitialConsentState,
+    validateRequiredConsents,
+    getRequiredConsents,
+    getOptionalConsents,
+} from '@/lib/consents';
 import { ClauseType, TerritorialScope, APKData } from '@/types';
+import { CoverageVariant, COVERAGE_VARIANTS, getStandardVariants, CUSTOM_VARIANT } from '@/lib/variants';
+import { ADRClass, ADR_CLASSES, getADRClassOptions, calculateADRMultiplier, hasDeclinedClasses } from '@/lib/adr-classes';
+import IPIDDocument from '@/components/documents/IPIDDocument';
+import OWUModal from '@/components/documents/OWUModal';
+import { DownloadOfferButton } from '@/components/documents/DownloadOfferButton';
 import styles from './page.module.css';
 
 const steps = [
@@ -33,7 +62,8 @@ const steps = [
     { id: 2, title: 'Parametry polisy', icon: Shield },
     { id: 3, title: 'Analiza potrzeb (APK)', icon: FileText },
     { id: 4, title: 'Klauzule dodatkowe', icon: CheckCircle2 },
-    { id: 5, title: 'Podsumowanie', icon: Calculator },
+    { id: 5, title: 'Zgody i dokumenty', icon: ClipboardCheck },
+    { id: 6, title: 'Podsumowanie', icon: Calculator },
 ];
 
 const scopeOptions = [
@@ -56,6 +86,13 @@ interface FormData {
     clientName: string;
     clientEmail: string;
     clientPhone: string;
+    // Address
+    clientStreet: string;
+    clientHouseNumber: string;
+    clientApartmentNumber: string;
+    clientCity: string;
+    clientPostalCode: string;
+    clientVoivodeship: string;
     yearsInBusiness: number;
     fleetSize: number;
 
@@ -63,6 +100,11 @@ interface FormData {
     sumInsured: number;
     territorialScope: TerritorialScope;
     policyDuration: number;
+    // NEW: Enhanced pricing fields
+    cargoType: CargoType;
+    subcontractorPercent: number;
+    paymentInstallments: PaymentInstallments;
+    deductibleLevel: DeductibleLevel;
 
     // Step 3: APK
     mainCargoTypes: string;
@@ -72,11 +114,22 @@ interface FormData {
     claimsLast3Years: number;
     highValueGoods: boolean;
     dangerousGoods: boolean;
+    selectedADRClasses: ADRClass[];
     temperatureControlled: boolean;
     internationalTransport: boolean;
 
     // Step 4: Clauses
+    selectedVariant: CoverageVariant;
     selectedClauses: ClauseType[];
+
+    // NEW: Fleet
+    vehicles: {
+        registrationNumber: string;
+        brand: string;
+        model: string;
+        year: number;
+        vin: string;
+    }[];
 }
 
 const initialFormData: FormData = {
@@ -84,11 +137,22 @@ const initialFormData: FormData = {
     clientName: '',
     clientEmail: '',
     clientPhone: '',
+    clientStreet: '',
+    clientHouseNumber: '',
+    clientApartmentNumber: '',
+    clientCity: '',
+    clientPostalCode: '',
+    clientVoivodeship: '',
     yearsInBusiness: 5,
     fleetSize: 10,
     sumInsured: 300000,
     territorialScope: 'EUROPE',
     policyDuration: 12,
+    // NEW: Enhanced pricing defaults
+    cargoType: 'STANDARD',
+    subcontractorPercent: 0,
+    paymentInstallments: 1,
+    deductibleLevel: 'STANDARD',
     mainCargoTypes: '',
     averageCargoValue: 50000,
     maxSingleShipmentValue: 100000,
@@ -96,15 +160,109 @@ const initialFormData: FormData = {
     claimsLast3Years: 0,
     highValueGoods: false,
     dangerousGoods: false,
+    selectedADRClasses: [],
     temperatureControlled: false,
     internationalTransport: true,
-    selectedClauses: ['GROSS_NEGLIGENCE'],
+    selectedVariant: 'STANDARD',
+    selectedClauses: ['GROSS_NEGLIGENCE', 'PARKING', 'SUBCONTRACTORS'],
+    vehicles: [],
 };
 
 export default function NewQuotePage() {
     const [currentStep, setCurrentStep] = useState(1);
     const [formData, setFormData] = useState<FormData>(initialFormData);
     const [calculationResult, setCalculationResult] = useState<CalculationResult | null>(null);
+    // NEW: Consent and modal state
+    const [consents, setConsents] = useState<ConsentState>(getInitialConsentState());
+    const [showIPIDModal, setShowIPIDModal] = useState(false);
+    const [showOWUModal, setShowOWUModal] = useState(false);
+    const [ipidConfirmed, setIpidConfirmed] = useState(false);
+    const [owuConfirmed, setOwuConfirmed] = useState(false);
+    const [isFetchingGus, setIsFetchingGus] = useState(false);
+    const [isFetchingCepik, setIsFetchingCepik] = useState(false);
+    const [vehicleSearchQuery, setVehicleSearchQuery] = useState('');
+    const [isSaving, setIsSaving] = useState(false);
+    const router = useRouter();
+
+    const fetchGusData = async () => {
+        const nip = formData.clientNip.replace(/[^0-9]/g, '');
+        if (!nip || nip.length !== 10) {
+            alert('Wprowadź poprawny NIP (10 cyfr)');
+            return;
+        }
+
+        setIsFetchingGus(true);
+        try {
+            const response = await fetch(`/api/gus/search?nip=${nip}`);
+            const json = await response.json();
+
+            if (response.ok && json.data) {
+                const data: GusCompanyData = json.data;
+                setFormData(prev => ({
+                    ...prev,
+                    clientName: data.name,
+                    clientStreet: data.street || '',
+                    clientHouseNumber: data.houseNumber || '',
+                    clientApartmentNumber: data.apartmentNumber || '',
+                    clientCity: data.city,
+                    clientPostalCode: data.postalCode || '',
+                    clientVoivodeship: data.voivodeship || '',
+                }));
+            } else {
+                alert('Nie znaleziono firmy w bazie GUS.');
+            }
+        } catch (error) {
+            console.error('Błąd pobierania danych z GUS:', error);
+            alert('Wystąpił błąd podczas pobierania danych z GUS.');
+        } finally {
+            setIsFetchingGus(false);
+        }
+    };
+
+    const fetchCepikData = async () => {
+        if (!vehicleSearchQuery) return;
+
+        setIsFetchingCepik(true);
+        try {
+            const response = await fetch(`/api/cepik/search?reg=${vehicleSearchQuery}`);
+            const json = await response.json();
+
+            if (response.ok && json.data) {
+                const data = json.data;
+                // Add to fleet if not already there
+                const alreadyExists = formData.vehicles.find(v => v.registrationNumber === data.registrationNumber);
+                if (alreadyExists) {
+                    alert('Pojazd jest już na liście.');
+                } else {
+                    setFormData(prev => ({
+                        ...prev,
+                        vehicles: [...prev.vehicles, {
+                            registrationNumber: data.registrationNumber,
+                            brand: data.brand,
+                            model: data.model,
+                            year: data.productionYear,
+                            vin: data.vin
+                        }]
+                    }));
+                    setVehicleSearchQuery('');
+                }
+            } else {
+                alert('Nie znaleziono pojazdu w bazie CEPiK.');
+            }
+        } catch (error) {
+            console.error('Błąd CEPiK:', error);
+            alert('Wystąpił błąd podczas pobierania danych z CEPiK.');
+        } finally {
+            setIsFetchingCepik(false);
+        }
+    };
+
+    const removeVehicle = (reg: string) => {
+        setFormData(prev => ({
+            ...prev,
+            vehicles: prev.vehicles.filter(v => v.registrationNumber !== reg)
+        }));
+    };
 
     const updateForm = <K extends keyof FormData>(key: K, value: FormData[K]) => {
         setFormData((prev) => ({ ...prev, [key]: value }));
@@ -117,6 +275,10 @@ export default function NewQuotePage() {
                 ? prev.selectedClauses.filter((c) => c !== clauseType)
                 : [...prev.selectedClauses, clauseType],
         }));
+    };
+
+    const updateConsent = (consentType: string, value: boolean) => {
+        setConsents(prev => ({ ...prev, [consentType]: value }));
     };
 
     const calculateQuote = () => {
@@ -137,16 +299,74 @@ export default function NewQuotePage() {
             },
             yearsInBusiness: formData.yearsInBusiness,
             fleetSize: formData.fleetSize,
+            // NEW: Pass enhanced pricing fields
+            cargoType: formData.cargoType,
+            subcontractorPercent: formData.subcontractorPercent,
+            paymentInstallments: formData.paymentInstallments,
+            deductibleLevel: formData.deductibleLevel,
         };
 
         const result = calculatePremium(input);
         setCalculationResult(result);
     };
 
+    const handleSaveQuote = async () => {
+        setIsSaving(true);
+        try {
+            const response = await fetch('/api/quotes', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    ...formData,
+                    clientNIP: formData.clientNip,
+                    requestedSumInsured: formData.sumInsured,
+                    requestedScope: formData.territorialScope,
+                    requestedClauses: formData.selectedClauses,
+                    apkData: {
+                        mainCargoTypes: formData.mainCargoTypes.split(',').map(s => s.trim()),
+                        averageCargoValue: formData.averageCargoValue,
+                        maxSingleShipmentValue: formData.maxSingleShipmentValue,
+                        monthlyShipments: formData.monthlyShipments,
+                        claimsLast3Years: formData.claimsLast3Years,
+                        highValueGoods: formData.highValueGoods,
+                        dangerousGoods: formData.dangerousGoods,
+                        temperatureControlled: formData.temperatureControlled,
+                        internationalTransport: formData.internationalTransport,
+                    },
+                    calculationResult,
+                    status: 'CALCULATED',
+                }),
+            });
+
+            if (response.ok) {
+                alert('Wycena została pomyślnie zapisana!');
+                router.push('/quotes');
+            } else {
+                const error = await response.json();
+                alert(`Błąd podczas zapisywania: ${error.error || 'Nieznany błąd'}`);
+            }
+        } catch (error) {
+            console.error('Save quote error:', error);
+            alert('Wystąpił błąd podczas połączenia z serwerem.');
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const canProceedToSummary = () => {
+        const { valid } = validateRequiredConsents(consents);
+        return valid && ipidConfirmed && owuConfirmed;
+    };
+
     const handleNext = () => {
-        if (currentStep < 5) {
+        if (currentStep < 6) {
+            // Validate consents before proceeding to summary
+            if (currentStep === 5 && !canProceedToSummary()) {
+                alert('Proszę potwierdzić wszystkie wymagane zgody i dokumenty.');
+                return;
+            }
             setCurrentStep(currentStep + 1);
-            if (currentStep === 4) {
+            if (currentStep === 5) {
                 calculateQuote();
             }
         }
@@ -157,6 +377,25 @@ export default function NewQuotePage() {
             setCurrentStep(currentStep - 1);
         }
     };
+
+    const offerPdfData = calculationResult ? {
+        quoteNumber: 'DRAFT/2026/01/06',
+        date: new Date().toLocaleDateString('pl-PL'),
+        client: {
+            name: formData.clientName,
+            nip: formData.clientNip,
+            address: `${formData.clientStreet} ${formData.clientHouseNumber}${formData.clientApartmentNumber ? '/' + formData.clientApartmentNumber : ''}`,
+            city: `${formData.clientPostalCode} ${formData.clientCity}`
+        },
+        policy: {
+            scope: scopeOptions.find(s => s.value === formData.territorialScope)?.label || '',
+            sumInsured: formatCurrency(formData.sumInsured),
+            duration: `${formData.policyDuration} miesięcy`,
+            cargoType: CARGO_TYPE_MULTIPLIERS[formData.cargoType]?.namePL || formData.cargoType
+        },
+        clauses: formData.selectedClauses.map(c => CLAUSE_DEFINITIONS.find(def => def.type === c)?.namePL || c),
+        premium: formatCurrency(calculationResult.breakdown.totalPremium)
+    } : null;
 
     return (
         <div className={styles.page}>
@@ -203,13 +442,26 @@ export default function NewQuotePage() {
                         </CardHeader>
                         <CardContent>
                             <div className={styles.formGrid}>
-                                <Input
-                                    label="NIP"
-                                    placeholder="Wprowadź NIP klienta"
-                                    value={formData.clientNip}
-                                    onChange={(e) => updateForm('clientNip', e.target.value)}
-                                    hint="Dane zostaną pobrane automatycznie z REGON"
-                                />
+                                <div className={styles.nipRow}>
+                                    <div className={styles.nipInput}>
+                                        <Input
+                                            label="NIP"
+                                            placeholder="Wprowadź NIP klienta"
+                                            value={formData.clientNip}
+                                            onChange={(e) => updateForm('clientNip', e.target.value)}
+                                            hint="Dane zostaną pobrane automatycznie z GUS"
+                                        />
+                                    </div>
+                                    <Button
+                                        variant="secondary"
+                                        onClick={fetchGusData}
+                                        disabled={isFetchingGus || !formData.clientNip}
+                                        leftIcon={isFetchingGus ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
+                                        style={{ marginBottom: '24px' }} // Align with input height
+                                    >
+                                        {isFetchingGus ? 'Pobieranie...' : 'Pobierz z GUS'}
+                                    </Button>
+                                </div>
                                 <Input
                                     label="Nazwa firmy"
                                     placeholder="Nazwa klienta"
@@ -229,6 +481,42 @@ export default function NewQuotePage() {
                                     value={formData.clientPhone}
                                     onChange={(e) => updateForm('clientPhone', e.target.value)}
                                 />
+
+                                <div className={styles.addressGrid}>
+                                    <Input
+                                        label="Ulica"
+                                        value={formData.clientStreet}
+                                        onChange={(e) => updateForm('clientStreet', e.target.value)}
+                                    />
+                                    <Input
+                                        label="Nr domu"
+                                        value={formData.clientHouseNumber}
+                                        onChange={(e) => updateForm('clientHouseNumber', e.target.value)}
+                                    />
+                                    <Input
+                                        label="Nr lokalu"
+                                        value={formData.clientApartmentNumber}
+                                        onChange={(e) => updateForm('clientApartmentNumber', e.target.value)}
+                                    />
+                                </div>
+                                <div className={styles.cityGrid}>
+                                    <Input
+                                        label="Kod pocztowy"
+                                        placeholder="XX-XXX"
+                                        value={formData.clientPostalCode}
+                                        onChange={(e) => updateForm('clientPostalCode', e.target.value)}
+                                    />
+                                    <Input
+                                        label="Miejscowość"
+                                        value={formData.clientCity}
+                                        onChange={(e) => updateForm('clientCity', e.target.value)}
+                                    />
+                                    <Input
+                                        label="Województwo"
+                                        value={formData.clientVoivodeship}
+                                        onChange={(e) => updateForm('clientVoivodeship', e.target.value)}
+                                    />
+                                </div>
                                 <Input
                                     label="Lata w branży"
                                     type="number"
@@ -293,6 +581,104 @@ export default function NewQuotePage() {
                                     value={formData.policyDuration.toString()}
                                     onChange={(e) => updateForm('policyDuration', parseInt(e.target.value))}
                                 />
+
+                                {/* NEW: Enhanced pricing fields */}
+                                <Select
+                                    label="Typ ładunku"
+                                    options={Object.entries(CARGO_TYPE_MULTIPLIERS).map(([value, info]) => ({
+                                        value,
+                                        label: `${info.namePL}${info.multiplier !== 1 ? ` (×${info.multiplier})` : ''}`,
+                                    }))}
+                                    value={formData.cargoType}
+                                    onChange={(e) => updateForm('cargoType', e.target.value as CargoType)}
+                                />
+                                <Input
+                                    label="Procent podwykonawców (%)"
+                                    type="number"
+                                    min={0}
+                                    max={100}
+                                    value={formData.subcontractorPercent}
+                                    onChange={(e) => updateForm('subcontractorPercent', Math.min(100, Math.max(0, parseInt(e.target.value) || 0)))}
+                                    hint="Jaki % frachtu wykonują podwykonawcy?"
+                                />
+                                <Select
+                                    label="Płatność w ratach"
+                                    options={[
+                                        { value: '1', label: 'Jednorazowo (brak dopłaty)' },
+                                        { value: '2', label: '2 raty (+3%)' },
+                                        { value: '4', label: '4 raty (+5%)' },
+                                    ]}
+                                    value={formData.paymentInstallments.toString()}
+                                    onChange={(e) => updateForm('paymentInstallments', parseInt(e.target.value) as PaymentInstallments)}
+                                />
+                                <Select
+                                    label="Franszyza redukcyjna"
+                                    options={Object.entries(DEDUCTIBLE_OPTIONS).map(([value, info]) => ({
+                                        value,
+                                        label: info.labelPL,
+                                    }))}
+                                    value={formData.deductibleLevel}
+                                    onChange={(e) => updateForm('deductibleLevel', e.target.value as DeductibleLevel)}
+                                />
+
+                                <div className={styles.fullWidth}>
+                                    <div className={styles.sectionHeader}>
+                                        <h3 className={styles.sectionTitle}>Flota pojazdów</h3>
+                                        <p className={styles.sectionSubtitle}>Dodaj pojazdy, które mają zostać objęte ochroną</p>
+                                    </div>
+
+                                    <div className={styles.vehicleLookup}>
+                                        <Input
+                                            label="Nr rejestracyjny pojazdu"
+                                            placeholder="np. WA12345"
+                                            value={vehicleSearchQuery}
+                                            onChange={(e) => setVehicleSearchQuery(e.target.value.toUpperCase())}
+                                            hint="Wyszukaj pojazd w bazie CEPiK (Testuj: WA12345, KR99887, PO5566A)"
+                                        />
+                                        <Button
+                                            variant="secondary"
+                                            onClick={fetchCepikData}
+                                            disabled={isFetchingCepik || !vehicleSearchQuery}
+                                            leftIcon={isFetchingCepik ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
+                                        >
+                                            Weryfikuj w CEPiK
+                                        </Button>
+                                    </div>
+
+                                    {formData.vehicles.length > 0 && (
+                                        <div className={styles.vehiclesList}>
+                                            <table className={styles.vehicleTable}>
+                                                <thead>
+                                                    <tr>
+                                                        <th>Nr rejestracyjny</th>
+                                                        <th>Marka i model</th>
+                                                        <th>Rok prod.</th>
+                                                        <th>VIN</th>
+                                                        <th style={{ width: '40px' }}></th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {formData.vehicles.map((v) => (
+                                                        <tr key={v.registrationNumber}>
+                                                            <td className={styles.regCell}>{v.registrationNumber}</td>
+                                                            <td>{v.brand} {v.model}</td>
+                                                            <td>{v.year}</td>
+                                                            <td className={styles.vinCell}>{v.vin}</td>
+                                                            <td>
+                                                                <button
+                                                                    className={styles.removeBtn}
+                                                                    onClick={() => removeVehicle(v.registrationNumber)}
+                                                                >
+                                                                    <Trash2 size={16} />
+                                                                </button>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         </CardContent>
                     </Card>
@@ -356,10 +742,64 @@ export default function NewQuotePage() {
                                             <input
                                                 type="checkbox"
                                                 checked={formData.dangerousGoods}
-                                                onChange={(e) => updateForm('dangerousGoods', e.target.checked)}
+                                                onChange={(e) => {
+                                                    updateForm('dangerousGoods', e.target.checked);
+                                                    if (!e.target.checked) {
+                                                        updateForm('selectedADRClasses', []);
+                                                    }
+                                                }}
                                             />
                                             <span>Towary niebezpieczne (ADR)</span>
                                         </label>
+                                    </div>
+
+                                    {/* ADR Class Selector - shown when dangerousGoods is checked */}
+                                    {formData.dangerousGoods && (
+                                        <div className={styles.adrSection}>
+                                            <h4><AlertCircle size={18} /> Wybierz klasy ADR</h4>
+                                            <p className={styles.adrHint}>
+                                                Zaznacz wszystkie klasy towarów niebezpiecznych, które przewozisz. Klasy 1 i 7 są automatycznie odrzucane.
+                                            </p>
+                                            <div className={styles.adrClassGrid}>
+                                                {Object.values(ADR_CLASSES).map((adrClass) => {
+                                                    const isSelected = formData.selectedADRClasses.includes(adrClass.class);
+                                                    return (
+                                                        <label
+                                                            key={adrClass.class}
+                                                            className={`${styles.adrClassItem} ${isSelected ? styles.selected : ''} ${adrClass.isDeclined ? styles.disabled : ''}`}
+                                                        >
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={isSelected}
+                                                                disabled={adrClass.isDeclined}
+                                                                onChange={(e) => {
+                                                                    if (adrClass.isDeclined) return;
+                                                                    const newClasses = e.target.checked
+                                                                        ? [...formData.selectedADRClasses, adrClass.class]
+                                                                        : formData.selectedADRClasses.filter(c => c !== adrClass.class);
+                                                                    updateForm('selectedADRClasses', newClasses);
+                                                                }}
+                                                            />
+                                                            <span>{adrClass.class}: {adrClass.namePL}</span>
+                                                        </label>
+                                                    );
+                                                })}
+                                            </div>
+                                            {hasDeclinedClasses(formData.selectedADRClasses).length > 0 && (
+                                                <div className={styles.adrWarning}>
+                                                    <AlertCircle size={16} />
+                                                    Wybrano klasy wykluczone z ubezpieczenia. Proszę usunąć klasy 1 lub 7.
+                                                </div>
+                                            )}
+                                            {formData.selectedADRClasses.length > 0 && (
+                                                <div style={{ marginTop: 'var(--spacing-md)', fontSize: '0.8125rem', color: 'var(--color-text-secondary)' }}>
+                                                    Mnożnik ryzyka ADR: <strong>×{calculateADRMultiplier(formData.selectedADRClasses)}</strong>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    <div className={styles.checkboxGrid}>
                                         <label className={styles.checkbox}>
                                             <input
                                                 type="checkbox"
@@ -387,49 +827,198 @@ export default function NewQuotePage() {
                 {currentStep === 4 && (
                     <Card padding="lg" className={styles.formCard}>
                         <CardHeader>
-                            <CardTitle>Klauzule dodatkowe</CardTitle>
+                            <CardTitle>Wariant i klauzule dodatkowe</CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <div className={styles.clausesGrid}>
-                                {CLAUSE_DEFINITIONS.map((clause) => {
-                                    const isSelected = formData.selectedClauses.includes(clause.type);
-                                    return (
-                                        <div
-                                            key={clause.type}
-                                            className={`${styles.clauseCard} ${isSelected ? styles.selected : ''}`}
-                                            onClick={() => toggleClause(clause.type)}
-                                        >
-                                            <div className={styles.clauseHeader}>
-                                                <div className={styles.clauseCheck}>
-                                                    {isSelected && <Check size={16} />}
+                            {/* Variant Selection Cards */}
+                            <div className={styles.variantSection}>
+                                <h4 className={styles.sectionSubtitle}>Wybierz wariant ochrony</h4>
+                                <div className={styles.variantGrid}>
+                                    {getStandardVariants().map((variant) => {
+                                        const isSelected = formData.selectedVariant === variant.type;
+                                        return (
+                                            <div
+                                                key={variant.type}
+                                                className={`${styles.variantCard} ${isSelected ? styles.selected : ''}`}
+                                                style={{ borderColor: isSelected ? variant.color : undefined }}
+                                                onClick={() => {
+                                                    updateForm('selectedVariant', variant.type);
+                                                    updateForm('selectedClauses', [...variant.includedClauses]);
+                                                }}
+                                            >
+                                                {variant.recommended && (
+                                                    <Badge variant="accent" size="sm" className={styles.variantBadge}>
+                                                        Polecany
+                                                    </Badge>
+                                                )}
+                                                <h3 style={{ color: variant.color }}>{variant.namePL}</h3>
+                                                <p className={styles.variantDesc}>{variant.descriptionPL}</p>
+                                                <div className={styles.variantClauses}>
+                                                    {variant.includedClauses.map(clauseType => {
+                                                        const clauseDef = CLAUSE_DEFINITIONS.find(c => c.type === clauseType);
+                                                        return (
+                                                            <span key={clauseType} className={styles.variantClauseTag}>
+                                                                <Check size={12} /> {clauseDef?.namePL || clauseType}
+                                                            </span>
+                                                        );
+                                                    })}
                                                 </div>
-                                                <Badge
-                                                    variant={
-                                                        clause.riskCategory === 'HIGH' ? 'danger' :
-                                                            clause.riskCategory === 'ELEVATED' ? 'warning' : 'default'
-                                                    }
-                                                    size="sm"
-                                                >
-                                                    {clause.riskCategory === 'HIGH' ? 'Wysokie' :
-                                                        clause.riskCategory === 'ELEVATED' ? 'Podwyższone' : 'Standardowe'}
-                                                </Badge>
+                                                {variant.bundleDiscount > 0 && (
+                                                    <div className={styles.variantDiscount}>
+                                                        -{variant.bundleDiscount * 100}% rabat pakietowy
+                                                    </div>
+                                                )}
                                             </div>
-                                            <h4 className={styles.clauseName}>{clause.namePL}</h4>
-                                            <p className={styles.clauseDesc}>{clause.descriptionPL}</p>
-                                            <div className={styles.clauseMeta}>
-                                                <span>Sublimit: {clause.defaultSublimitPercentage}%</span>
-                                                <span>+{clause.basePremiumRate}% składki</span>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
+                                        );
+                                    })}
+                                    {/* Custom option */}
+                                    <div
+                                        className={`${styles.variantCard} ${formData.selectedVariant === 'CUSTOM' ? styles.selected : ''}`}
+                                        onClick={() => updateForm('selectedVariant', 'CUSTOM')}
+                                    >
+                                        <h3>{CUSTOM_VARIANT.namePL}</h3>
+                                        <p className={styles.variantDesc}>{CUSTOM_VARIANT.descriptionPL}</p>
+                                    </div>
+                                </div>
                             </div>
+
+                            {/* Individual clause selection - shown when CUSTOM or for advanced users */}
+                            {formData.selectedVariant === 'CUSTOM' && (
+                                <>
+                                    <h4 className={styles.sectionSubtitle} style={{ marginTop: '2rem' }}>
+                                        Wybierz klauzule indywidualnie
+                                    </h4>
+                                    <div className={styles.clausesGrid}>
+                                        {CLAUSE_DEFINITIONS.map((clause) => {
+                                            const isSelected = formData.selectedClauses.includes(clause.type);
+                                            return (
+                                                <div
+                                                    key={clause.type}
+                                                    className={`${styles.clauseCard} ${isSelected ? styles.selected : ''}`}
+                                                    onClick={() => toggleClause(clause.type)}
+                                                >
+                                                    <div className={styles.clauseHeader}>
+                                                        <div className={styles.clauseCheck}>
+                                                            {isSelected && <Check size={16} />}
+                                                        </div>
+                                                        <Badge
+                                                            variant={
+                                                                clause.riskCategory === 'HIGH' ? 'danger' :
+                                                                    clause.riskCategory === 'ELEVATED' ? 'warning' : 'default'
+                                                            }
+                                                            size="sm"
+                                                        >
+                                                            {clause.riskCategory === 'HIGH' ? 'Wysokie' :
+                                                                clause.riskCategory === 'ELEVATED' ? 'Podwyższone' : 'Standardowe'}
+                                                        </Badge>
+                                                    </div>
+                                                    <h4 className={styles.clauseName}>{clause.namePL}</h4>
+                                                    <p className={styles.clauseDesc}>{clause.descriptionPL}</p>
+                                                    <div className={styles.clauseMeta}>
+                                                        <span>Sublimit: {clause.defaultSublimitPercentage}%</span>
+                                                        <span>+{clause.basePremiumRate}% składki</span>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </>
+                            )}
                         </CardContent>
                     </Card>
                 )}
 
-                {/* Step 5: Summary */}
-                {currentStep === 5 && calculationResult && (
+                {/* Step 5: Consents and Documents (NEW) */}
+                {currentStep === 5 && (
+                    <Card padding="lg" className={styles.formCard}>
+                        <CardHeader>
+                            <CardTitle>Zgody i dokumenty</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            {/* IDD Documents */}
+                            <div className={styles.documentsSection}>
+                                <h4 className={styles.sectionSubtitle}>Dokumenty ubezpieczeniowe</h4>
+                                <p className={styles.sectionHint}>
+                                    Zgodnie z Dyrektywą IDD, przed zawarciem umowy należy zapoznać się z poniższymi dokumentami.
+                                </p>
+                                <div className={styles.documentButtons}>
+                                    <Button
+                                        variant={ipidConfirmed ? 'secondary' : 'primary'}
+                                        leftIcon={ipidConfirmed ? <Check size={18} /> : <Eye size={18} />}
+                                        onClick={() => setShowIPIDModal(true)}
+                                    >
+                                        {ipidConfirmed ? 'IPID potwierdzone' : 'Zobacz Kartę Produktu (IPID)'}
+                                    </Button>
+                                    <Button
+                                        variant={owuConfirmed ? 'secondary' : 'primary'}
+                                        leftIcon={owuConfirmed ? <Check size={18} /> : <Eye size={18} />}
+                                        onClick={() => setShowOWUModal(true)}
+                                    >
+                                        {owuConfirmed ? 'OWU potwierdzone' : 'Zobacz OWU'}
+                                    </Button>
+                                </div>
+                            </div>
+
+                            {/* Required consents */}
+                            <div className={styles.consentsSection}>
+                                <h4 className={styles.sectionSubtitle}>Wymagane zgody</h4>
+                                <div className={styles.consentsList}>
+                                    {getRequiredConsents().map((consent) => (
+                                        <label key={consent.type} className={styles.consentItem}>
+                                            <input
+                                                type="checkbox"
+                                                checked={consents[consent.type] || false}
+                                                onChange={(e) => updateConsent(consent.type, e.target.checked)}
+                                            />
+                                            <div className={styles.consentContent}>
+                                                <span className={styles.consentLabel}>
+                                                    {consent.labelPL}
+                                                    <Badge variant="danger" size="sm">Wymagane</Badge>
+                                                </span>
+                                                <span className={styles.consentDescription}>
+                                                    {consent.descriptionPL}
+                                                </span>
+                                            </div>
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Optional consents */}
+                            <div className={styles.consentsSection}>
+                                <h4 className={styles.sectionSubtitle}>Zgody opcjonalne</h4>
+                                <div className={styles.consentsList}>
+                                    {getOptionalConsents().map((consent) => (
+                                        <label key={consent.type} className={styles.consentItem}>
+                                            <input
+                                                type="checkbox"
+                                                checked={consents[consent.type] || false}
+                                                onChange={(e) => updateConsent(consent.type, e.target.checked)}
+                                            />
+                                            <div className={styles.consentContent}>
+                                                <span className={styles.consentLabel}>{consent.labelPL}</span>
+                                                <span className={styles.consentDescription}>
+                                                    {consent.descriptionPL}
+                                                </span>
+                                            </div>
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Validation message */}
+                            {!canProceedToSummary() && (
+                                <div className={styles.consentWarning}>
+                                    <AlertCircle size={18} />
+                                    <span>Aby kontynuować, należy potwierdzić wszystkie wymagane zgody i przejrzeć dokumenty IPID oraz OWU.</span>
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+                )}
+
+                {/* Step 6: Summary (was Step 5) */}
+                {currentStep === 6 && calculationResult && (
                     <div className={styles.summaryGrid}>
                         <Card padding="lg">
                             <CardHeader>
@@ -551,22 +1140,47 @@ export default function NewQuotePage() {
                     Wstecz
                 </Button>
 
-                {currentStep < 5 ? (
+                {currentStep < 6 ? (
                     <Button
                         rightIcon={<ArrowRight size={18} />}
                         onClick={handleNext}
+                        disabled={currentStep === 5 && !canProceedToSummary()}
                     >
-                        Dalej
+                        {currentStep === 5 ? 'Przejdź do podsumowania' : 'Dalej'}
                     </Button>
                 ) : (
-                    <Button
-                        leftIcon={<Check size={18} />}
-                        onClick={() => alert('Wycena zapisana!')}
-                    >
-                        Zapisz wycenę
-                    </Button>
+                    <>
+                        {offerPdfData && <DownloadOfferButton data={offerPdfData} />}
+                        <Button
+                            leftIcon={<Check size={18} />}
+                            onClick={handleSaveQuote}
+                            isLoading={isSaving}
+                            disabled={isSaving}
+                        >
+                            Zapisz wycenę
+                        </Button>
+                    </>
                 )}
             </div>
+
+            {/* IPID Modal */}
+            {showIPIDModal && (
+                <IPIDDocument
+                    isModal={true}
+                    onClose={() => {
+                        setShowIPIDModal(false);
+                        setIpidConfirmed(true);
+                    }}
+                />
+            )}
+
+            {/* OWU Modal */}
+            {showOWUModal && (
+                <OWUModal
+                    onClose={() => setShowOWUModal(false)}
+                    onConfirm={() => setOwuConfirmed(true)}
+                />
+            )}
         </div>
     );
 }

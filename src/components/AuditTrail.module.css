@@ -1,0 +1,127 @@
+.timeline {
+    display: flex;
+    flex-direction: column;
+}
+
+.timelineItem {
+    display: flex;
+    gap: var(--spacing-md);
+}
+
+.timelineLine {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.timelineIcon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: var(--radius-full);
+    color: white;
+    flex-shrink: 0;
+}
+
+.timelineConnector {
+    flex: 1;
+    width: 2px;
+    background: var(--color-border);
+    margin: var(--spacing-xs) 0;
+    min-height: 20px;
+}
+
+.timelineContent {
+    flex: 1;
+    padding-bottom: var(--spacing-lg);
+}
+
+.timelineHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--spacing-xs);
+}
+
+.timelineAction {
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.timelineDate {
+    font-size: 0.75rem;
+    color: var(--color-text-tertiary);
+}
+
+.timelineDescription {
+    font-size: 0.875rem;
+    color: var(--color-text-primary);
+    margin: 0 0 var(--spacing-sm) 0;
+    line-height: 1.5;
+}
+
+.timelineMeta {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
+.timelineUser {
+    font-size: 0.8125rem;
+    color: var(--color-text-secondary);
+}
+
+.timelineDetails {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-sm);
+    margin-top: var(--spacing-sm);
+    padding: var(--spacing-sm);
+    background: var(--color-bg-tertiary);
+    border-radius: var(--radius-sm);
+}
+
+.detailItem {
+    font-size: 0.75rem;
+    color: var(--color-text-secondary);
+}
+
+.detailItem strong {
+    color: var(--color-text-tertiary);
+    font-weight: 500;
+    text-transform: capitalize;
+}
+
+.timelineChanges {
+    display: flex;
+    gap: var(--spacing-md);
+    margin-top: var(--spacing-sm);
+    font-size: 0.8125rem;
+}
+
+.oldValue {
+    color: var(--color-danger, #ef4444);
+    text-decoration: line-through;
+}
+
+.newValue {
+    color: var(--color-success, #10b981);
+}
+
+.emptyState {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-md);
+    padding: var(--spacing-2xl);
+    color: var(--color-text-tertiary);
+    text-align: center;
+}
+
+.emptyState p {
+    margin: 0;
+    font-size: 0.875rem;
+}

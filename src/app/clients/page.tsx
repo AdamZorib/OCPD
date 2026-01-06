@@ -25,7 +25,6 @@ import {
     TableCell,
     Select,
 } from '@/components/ui';
-import { mockClients } from '@/lib/mock-data';
 import styles from './page.module.css';
 
 const riskLevelLabels: Record<string, string> = {
@@ -61,7 +60,7 @@ const riskOptions = [
 ];
 
 export default function ClientsPage() {
-    const [clients, setClients] = useState<typeof mockClients>([]);
+    const [clients, setClients] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [search, setSearch] = useState('');
     const [scopeFilter, setScopeFilter] = useState('');
@@ -72,9 +71,11 @@ export default function ClientsPage() {
             try {
                 const response = await fetch('/api/clients');
                 const data = await response.json();
-                setClients(data.data);
+                // Ensure we always have an array even if API fails
+                setClients(Array.isArray(data.data) ? data.data : []);
             } catch (error) {
                 console.error('Failed to fetch clients:', error);
+                setClients([]); // Reset to empty array on error
             } finally {
                 setIsLoading(false);
             }
@@ -84,6 +85,7 @@ export default function ClientsPage() {
     }, []);
 
     const filteredClients = useMemo(() => {
+        if (!clients || !Array.isArray(clients)) return [];
         return clients.filter((client) => {
             // Search filter
             const searchLower = search.toLowerCase();

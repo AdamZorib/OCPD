@@ -7,6 +7,7 @@ export type ClauseType = 'GROSS_NEGLIGENCE' | 'PARKING' | 'UNAUTHORIZED_RELEASE'
 export type TerritorialScope = 'POLAND' | 'EUROPE' | 'WORLD';
 export type VehicleType = 'TRUCK' | 'SEMI_TRAILER' | 'VAN' | 'REFRIGERATED' | 'TANKER' | 'FLATBED';
 export type RiskLevel = 'LOW' | 'MEDIUM' | 'HIGH' | 'VERY_HIGH';
+export type SignatureStatus = 'PENDING' | 'SENT' | 'SIGNED' | 'REJECTED' | 'EXPIRED';
 
 // ============ CLIENT & COMPANY ============
 
@@ -98,30 +99,33 @@ export interface Policy {
   client?: Client;
   type: 'OCPD' | 'OCP_KABOTAZ' | 'CARGO';
   status: PolicyStatus;
-  
+
   // Coverage
   sumInsured: number;
   territorialScope: TerritorialScope;
   clauses: PolicyClause[];
-  
+
   // Pricing
   basePremium: number;
   clausesPremium: number;
   totalPremium: number;
-  
+
   // Dates
   validFrom: Date;
   validTo: Date;
   issuedAt?: Date;
-  
+
   // APK
   apkCompleted: boolean;
   apkData?: APKData;
-  
+
   // Documents
   ipidGenerated: boolean;
   policyCertificateUrl?: string;
-  
+  signatureStatus?: SignatureStatus;
+  signatureId?: string;
+  signedAt?: Date;
+
   // Metadata
   brokerId: string;
   underwriterId?: string;
@@ -146,32 +150,32 @@ export interface APKData {
   id: string;
   policyId: string;
   completedAt: Date;
-  
+
   // Transport characteristics
   mainCargoTypes: string[];
   averageCargoValue: number;
   maxSingleShipmentValue: number;
   monthlyShipments: number;
-  
+
   // Routes
   domesticTransport: boolean;
   internationalTransport: boolean;
   mainDestinations: string[];
-  
+
   // Risks
   highValueGoods: boolean;
   dangerousGoods: boolean;
   temperatureControlled: boolean;
-  
+
   // History
   claimsLast3Years: number;
   biggestClaimAmount?: number;
-  
+
   // Special requirements
   requiresGrossNegligence: boolean;
   requiresParkingCoverage: boolean;
   requiresSubcontractorsCoverage: boolean;
-  
+
   // Client declaration
   clientSignature?: string;
   clientSignatureDate?: Date;
@@ -184,24 +188,24 @@ export interface Claim {
   claimNumber: string;
   policyId: string;
   clientId: string;
-  
+
   // Incident
   incidentDate: Date;
   reportedDate: Date;
   description: string;
   location?: string;
-  
+
   // Financials
   claimedAmount: number;
   reservedAmount?: number;
   paidAmount?: number;
-  
+
   // Status
   status: 'REPORTED' | 'UNDER_REVIEW' | 'APPROVED' | 'REJECTED' | 'PAID' | 'CLOSED';
-  
+
   // Documents
   documents: ClaimDocument[];
-  
+
   createdAt: Date;
   updatedAt: Date;
 }
@@ -221,7 +225,7 @@ export interface Certificate {
   certificateNumber: string;
   policyId: string;
   policy?: Policy;
-  
+
   // Transport details
   cargoDescription: string;
   cargoValue: number;
@@ -229,12 +233,12 @@ export interface Certificate {
   unloadingPlace: string;
   transportDate: Date;
   vehicleRegistration: string;
-  
+
   // Generated
   generatedAt: Date;
   generatedBy: string;
   pdfUrl?: string;
-  
+
   isValid: boolean;
 }
 
@@ -246,14 +250,14 @@ export interface User {
   name: string;
   role: 'CLIENT' | 'BROKER' | 'UNDERWRITER' | 'ADMIN';
   phone?: string;
-  
+
   // For brokers
   brokerLicense?: string;
   brokerId?: string;
-  
+
   // For clients
   clientId?: string;
-  
+
   createdAt: Date;
   lastLoginAt?: Date;
 }
@@ -266,12 +270,12 @@ export interface Broker {
   licenseNumber: string;
   email: string;
   phone: string;
-  
+
   // Portfolio stats
   activeClients: number;
   activePolicies: number;
   totalPremium: number;
-  
+
   createdAt: Date;
 }
 
@@ -281,23 +285,26 @@ export interface QuoteRequest {
   id: string;
   clientNIP: string;
   clientData?: RegonData;
-  
+
   // Coverage request
   requestedSumInsured: number;
   requestedScope: TerritorialScope;
   requestedClauses: ClauseType[];
-  
+
   // APK answers
   apkData: Partial<APKData>;
-  
+
   // Calculated
   calculatedPremium?: number;
   premiumBreakdown?: PremiumBreakdown;
-  
+
   // Status
   status: 'DRAFT' | 'CALCULATED' | 'SENT' | 'ACCEPTED' | 'REJECTED' | 'EXPIRED';
-  
+
   validUntil?: Date;
+  signatureStatus?: SignatureStatus;
+  signatureId?: string;
+  signedAt?: Date;
   createdAt: Date;
   brokerId: string;
 }

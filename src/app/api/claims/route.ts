@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { mockClaims } from '@/lib/mock-data';
+import { prisma } from '@/lib/prisma';
 
 // GET /api/claims - List all claims
 export async function GET(request: NextRequest) {
@@ -8,30 +8,45 @@ export async function GET(request: NextRequest) {
     const clientId = searchParams.get('clientId') || '';
     const policyId = searchParams.get('policyId') || '';
 
-    let claims = [...mockClaims];
+    try {
+        // Build where clause
+        const where: Record<string, unknown> = {};
+        if (status) where.status = status;
+        if (clientId) where.clientId = clientId;
+        if (policyId) where.policyId = policyId;
 
-    if (status) {
-        claims = claims.filter((claim) => claim.status === status);
+        const claims = await prisma.claim.findMany({
+            where,
+            orderBy: { createdAt: 'desc' },
+        });
+
+        // Parse JSON fields
+        const claimsWithParsedData = claims.map((claim) => ({
+            ...claim,
+            documents: claim.documentsJson ? JSON.parse(claim.documentsJson) : [],
+        }));
+
+        // Calculate stats
+        const allClaims = await prisma.claim.findMany();
+        const openClaims = allClaims.filter(c => c.status === 'UNDER_REVIEW' || c.status === 'REPORTED');
+        const paidClaims = allClaims.filter(c => c.status === 'PAID');
+        const totalClaimed = allClaims.reduce((sum, c) => sum + c.claimedAmount, 0);
+        const totalPaid = allClaims.reduce((sum, c) => sum + (c.paidAmount || 0), 0);
+
+        return NextResponse.json({
+            data: claimsWithParsedData,
+            total: claimsWithParsedData.length,
+            stats: {
+                open: openClaims.length,
+                paid: paidClaims.length,
+                totalClaimed,
+                totalPaid,
+            },
+        });
+    } catch (error) {
+        console.error('Error fetching claims:', error);
+        return NextResponse.json({ error: 'Failed to fetch claims' }, { status: 500 });
     }
-
-    if (clientId) {
-        claims = claims.filter((claim) => claim.clientId === clientId);
-    }
-
-    if (policyId) {
-        claims = claims.filter((claim) => claim.policyId === policyId);
-    }
-
-    return NextResponse.json({
-        data: claims,
-        total: claims.length,
-        stats: {
-            open: mockClaims.filter((c) => c.status === 'UNDER_REVIEW' || c.status === 'REPORTED').length,
-            paid: mockClaims.filter((c) => c.status === 'PAID').length,
-            totalClaimed: mockClaims.reduce((sum, c) => sum + c.claimedAmount, 0),
-            totalPaid: mockClaims.reduce((sum, c) => sum + (c.paidAmount || 0), 0),
-        },
-    });
 }
 
 // POST /api/claims - Report a new claim
@@ -46,23 +61,31 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        const newClaim = {
-            id: `claim-${Date.now()}`,
-            claimNumber: `SZK/${new Date().getFullYear()}/${String(Date.now()).slice(-5)}`,
-            ...body,
-            incidentDate: body.incidentDate ? new Date(body.incidentDate) : new Date(),
-            reportedDate: new Date(),
-            status: 'REPORTED',
-            documents: [],
-            createdAt: new Date(),
-            updatedAt: new Date(),
-        };
+        const newClaim = await prisma.claim.create({
+            data: {
+                claimNumber: `SZK/${new Date().getFullYear()}/${String(Date.now()).slice(-5)}`,
+                policyId: body.policyId,
+                clientId: body.clientId,
+                incidentDate: body.incidentDate ? new Date(body.incidentDate) : new Date(),
+                reportedDate: new Date(),
+                description: body.description,
+                location: body.location || null,
+                claimedAmount: body.claimedAmount,
+                reservedAmount: body.reservedAmount || null,
+                status: 'REPORTED',
+                documentsJson: body.documents ? JSON.stringify(body.documents) : null,
+            },
+        });
 
-        return NextResponse.json(newClaim, { status: 201 });
+        return NextResponse.json({
+            ...newClaim,
+            documents: newClaim.documentsJson ? JSON.parse(newClaim.documentsJson) : [],
+        }, { status: 201 });
     } catch (error) {
+        console.error('Error creating claim:', error);
         return NextResponse.json(
-            { error: 'Invalid request body' },
-            { status: 400 }
+            { error: 'Failed to create claim' },
+            { status: 500 }
         );
     }
 }

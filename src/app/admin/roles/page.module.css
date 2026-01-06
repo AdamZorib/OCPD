@@ -1,0 +1,206 @@
+.page {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xl);
+}
+
+.rolesGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: var(--spacing-lg);
+}
+
+.roleCard {
+    transition: transform var(--transition-fast);
+}
+
+.roleCard:hover {
+    transform: translateY(-2px);
+}
+
+.roleHeader {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--spacing-md);
+    margin-bottom: var(--spacing-lg);
+}
+
+.roleIcon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: var(--radius-md);
+    color: white;
+    flex-shrink: 0;
+}
+
+.roleHeader h3 {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    margin: 0 0 var(--spacing-xs) 0;
+}
+
+.roleHeader p {
+    font-size: 0.8125rem;
+    color: var(--color-text-secondary);
+    margin: 0;
+    line-height: 1.4;
+}
+
+.roleStats {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: var(--spacing-md);
+    border-top: 1px solid var(--color-border);
+}
+
+.roleStat {
+    display: flex;
+    flex-direction: column;
+}
+
+.roleStatValue {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--color-accent-primary);
+}
+
+.roleStatLabel {
+    font-size: 0.6875rem;
+    color: var(--color-text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+/* Matrix */
+.matrixContainer {
+    overflow-x: auto;
+}
+
+.matrix {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 800px;
+}
+
+.matrix th,
+.matrix td {
+    padding: var(--spacing-sm) var(--spacing-md);
+    text-align: center;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.matrix th.permissionHeader {
+    text-align: left;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--color-text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    background: var(--color-bg-tertiary);
+    width: 300px;
+}
+
+.matrix th.roleHeader {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    background: var(--color-bg-tertiary);
+    border-top: 3px solid var(--color-accent-primary);
+    min-width: 100px;
+}
+
+.categoryRow {
+    cursor: pointer;
+    background: var(--color-bg-secondary);
+}
+
+.categoryRow:hover {
+    background: var(--color-bg-tertiary);
+}
+
+.categoryHeader {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    padding: var(--spacing-xs) 0;
+}
+
+.categoryHeader svg {
+    color: var(--color-text-tertiary);
+}
+
+.permissionCell {
+    text-align: left !important;
+}
+
+.permissionInfo {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.permissionName {
+    font-size: 0.8125rem;
+    color: var(--color-text-primary);
+}
+
+.permissionCode {
+    font-size: 0.6875rem;
+    color: var(--color-text-tertiary);
+    font-family: var(--font-mono, monospace);
+}
+
+.checkCell {
+    width: 100px;
+}
+
+.checkIcon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    background: rgba(16, 185, 129, 0.15);
+    color: var(--color-success);
+    border-radius: var(--radius-full);
+}
+
+.xIcon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    background: rgba(239, 68, 68, 0.1);
+    color: var(--color-danger);
+    border-radius: var(--radius-full);
+}
+
+/* Legend */
+.legend {
+    display: flex;
+    gap: var(--spacing-xl);
+    padding: var(--spacing-md);
+    background: var(--color-bg-secondary);
+    border-radius: var(--radius-md);
+}
+
+.legendItem {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    font-size: 0.8125rem;
+    color: var(--color-text-secondary);
+}
+
+.legendItem svg {
+    color: var(--color-text-tertiary);
+}

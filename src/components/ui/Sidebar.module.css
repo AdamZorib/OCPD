@@ -198,6 +198,28 @@
     color: var(--color-danger);
 }
 
+.loginBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-sm);
+    width: 100%;
+    padding: var(--spacing-md);
+    margin-bottom: var(--spacing-md);
+    background: var(--color-accent-primary);
+    border: none;
+    border-radius: var(--radius-md);
+    color: white;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.loginBtn:hover {
+    background: var(--color-accent-secondary);
+}
+
 /* Collapse button */
 .collapseBtn {
     width: 100%;

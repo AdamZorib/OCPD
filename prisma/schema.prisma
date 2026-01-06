@@ -1,0 +1,137 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Quote {
+  id                    String   @id @default(cuid())
+  clientNIP             String
+  clientName            String?
+  clientEmail           String?
+  clientPhone           String?
+  clientStreet          String?
+  clientHouseNumber     String?
+  clientApartmentNumber String?
+  clientCity            String?
+  clientPostalCode      String?
+  clientVoivodeship     String?
+  yearsInBusiness       Int?
+  fleetSize             Int?
+  
+  // Policy params
+  sumInsured            Float
+  territorialScope      String
+  policyDuration        Int?
+  cargoType             String?
+  subcontractorPercent  Int?
+  paymentInstallments   Int?
+  deductibleLevel       String?
+  
+  // APK Data (stored as JSON string)
+  apkDataJson           String?
+  
+  // Clauses (stored as comma-separated)
+  selectedClauses       String?
+  selectedVariant       String?
+  
+  // Calculation result (stored as JSON string)
+  calculationResultJson String?
+  
+  // Vehicles (stored as JSON string)
+  vehiclesJson          String?
+  
+  // Status
+  status                String   @default("DRAFT")
+  brokerId              String?
+  
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+}
+
+model Policy {
+  id                    String   @id @default(cuid())
+  policyNumber          String   @unique
+  clientId              String
+  clientNIP             String
+  clientName            String?
+  type                  String   @default("OCPD")
+  status                String   @default("DRAFT")
+  
+  sumInsured            Float
+  territorialScope      String
+  basePremium           Float?
+  clausesPremium        Float?
+  totalPremium          Float?
+  
+  // Clauses stored as JSON
+  clausesJson           String?
+  
+  validFrom             DateTime?
+  validTo               DateTime?
+  issuedAt              DateTime?
+  
+  apkCompleted          Boolean  @default(false)
+  ipidGenerated         Boolean  @default(false)
+  
+  signatureStatus       String?
+  signatureId           String?
+  signedAt              DateTime?
+  
+  brokerId              String?
+  underwriterId         String?
+  
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+}
+
+model Client {
+  id                    String   @id @default(cuid())
+  nip                   String   @unique
+  name                  String
+  email                 String?
+  phone                 String?
+  
+  street                String?
+  houseNumber           String?
+  apartmentNumber       String?
+  city                  String?
+  postalCode            String?
+  voivodeship           String?
+  
+  // Complex data stored as JSON
+  regonDataJson         String?
+  riskProfileJson       String?
+  fleetJson             String?
+  claimsHistoryJson     String?
+  
+  brokerId              String?
+  
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+}
+
+model Claim {
+  id             String   @id @default(cuid())
+  claimNumber    String   @unique
+  policyId       String
+  clientId       String
+  incidentDate   DateTime
+  reportedDate   DateTime
+  description    String
+  location       String?
+  claimedAmount  Float
+  reservedAmount Float?
+  paidAmount     Float?
+  status         String   @default("REPORTED")
+  documentsJson  String?
+  
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}

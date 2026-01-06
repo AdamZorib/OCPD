@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import {
     Search,
@@ -24,7 +24,6 @@ import {
     TableCell,
     Select,
 } from '@/components/ui';
-import { mockPolicies } from '@/lib/mock-data';
 import styles from './page.module.css';
 
 const statusLabels: Record<string, string> = {
@@ -89,33 +88,64 @@ const daysUntilExpiry = (date: Date) => {
 };
 
 export default function PoliciesPage() {
+    const [policies, setPolicies] = useState<any[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
     const [search, setSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState('');
     const [scopeFilter, setScopeFilter] = useState('');
 
+    useEffect(() => {
+        const fetchPolicies = async () => {
+            try {
+                const res = await fetch('/api/policies');
+                const data = await res.json();
+                setPolicies(data.data || []);
+            } catch (err) {
+                console.error('Failed to fetch policies:', err);
+                setPolicies([]);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+        fetchPolicies();
+    }, []);
+
     const filteredPolicies = useMemo(() => {
-        return mockPolicies.filter((policy) => {
+        if (!Array.isArray(policies)) return [];
+        return policies.filter((policy) => {
             const searchLower = search.toLowerCase();
             const matchesSearch =
                 policy.policyNumber.toLowerCase().includes(searchLower) ||
-                policy.client?.name.toLowerCase().includes(searchLower) ||
-                policy.client?.nip.includes(search);
+                (policy.clientName && policy.clientName.toLowerCase().includes(searchLower)) ||
+                (policy.clientNIP && policy.clientNIP.includes(search));
 
             const matchesStatus = !statusFilter || policy.status === statusFilter;
             const matchesScope = !scopeFilter || policy.territorialScope === scopeFilter;
 
             return matchesSearch && matchesStatus && matchesScope;
         });
-    }, [search, statusFilter, scopeFilter]);
+    }, [policies, search, statusFilter, scopeFilter]);
 
-    const activeCount = mockPolicies.filter(p => p.status === 'ACTIVE').length;
-    const expiringCount = mockPolicies.filter(p => {
-        const days = daysUntilExpiry(p.validTo);
+    const activeCount = useMemo(() => policies.filter(p => p.status === 'ACTIVE').length, [policies]);
+    const expiringCount = useMemo(() => policies.filter(p => {
+        if (!p.validTo) return false;
+        const days = daysUntilExpiry(new Date(p.validTo));
         return p.status === 'ACTIVE' && days <= 30 && days > 0;
-    }).length;
-    const totalPremium = mockPolicies
+    }).length, [policies]);
+    const totalPremium = useMemo(() => policies
         .filter(p => p.status === 'ACTIVE')
-        .reduce((sum, p) => sum + p.totalPremium, 0);
+        .reduce((sum, p) => sum + (p.totalPremium || 0), 0), [policies]);
+
+    if (isLoading) {
+        return (
+            <div className={styles.page}>
+                <header className={styles.header}>
+                    <h1 className={styles.title}>Polisy</h1>
+                    <p className={styles.subtitle}>Ładowanie danych...</p>
+                </header>
+            </div>
+        );
+    }
 
     return (
         <div className={styles.page}>
@@ -199,7 +229,7 @@ export default function PoliciesPage() {
                     </TableHeader>
                     <TableBody>
                         {filteredPolicies.map((policy) => {
-                            const days = daysUntilExpiry(policy.validTo);
+                            const days = policy.validTo ? daysUntilExpiry(new Date(policy.validTo)) : 0;
                             const isExpiring = policy.status === 'ACTIVE' && days <= 30 && days > 0;
 
                             return (
@@ -212,8 +242,8 @@ export default function PoliciesPage() {
                                     </TableCell>
                                     <TableCell>
                                         <div className={styles.clientCell}>
-                                            <span className={styles.clientName}>{policy.client?.name}</span>
-                                            <span className={styles.clientNip}>NIP: {policy.client?.nip}</span>
+                                            <span className={styles.clientName}>{policy.clientName}</span>
+                                            <span className={styles.clientNip}>NIP: {policy.clientNIP}</span>
                                         </div>
                                     </TableCell>
                                     <TableCell>{formatCurrency(policy.sumInsured)}</TableCell>
@@ -225,10 +255,10 @@ export default function PoliciesPage() {
                                     <TableCell className={styles.premiumCell}>
                                         {formatCurrency(policy.totalPremium)}
                                     </TableCell>
-                                    <TableCell>{formatDate(policy.validFrom)}</TableCell>
+                                    <TableCell>{policy.validFrom ? formatDate(new Date(policy.validFrom)) : '-'}</TableCell>
                                     <TableCell>
                                         <span className={isExpiring ? styles.expiringDate : ''}>
-                                            {formatDate(policy.validTo)}
+                                            {policy.validTo ? formatDate(new Date(policy.validTo)) : '-'}
                                             {isExpiring && <span className={styles.expiringBadge}>{days} dni</span>}
                                         </span>
                                     </TableCell>

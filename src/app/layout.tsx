@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { Sidebar } from "@/components/ui";
+import Providers from "./providers";
 
 export const metadata: Metadata = {
   title: "OCPD Insurance Platform",
@@ -15,13 +16,16 @@ export default function RootLayout({
   return (
     <html lang="pl" suppressHydrationWarning>
       <body suppressHydrationWarning>
-        <div className="app-layout">
-          <Sidebar />
-          <main className="main-content">
-            {children}
-          </main>
-        </div>
+        <Providers>
+          <div className="app-layout">
+            <Sidebar />
+            <main className="main-content">
+              {children}
+            </main>
+          </div>
+        </Providers>
       </body>
     </html>
   );
 }
+

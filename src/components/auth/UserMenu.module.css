@@ -1,0 +1,150 @@
+.userMenu {
+    position: relative;
+}
+
+.trigger {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-xs) var(--spacing-sm);
+    background: transparent;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.trigger:hover {
+    background: var(--color-bg-tertiary);
+    border-color: var(--color-border-hover);
+}
+
+.avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius-full);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: white;
+}
+
+.userInfo {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+}
+
+.userName {
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--color-text-primary);
+}
+
+.userRole {
+    font-size: 0.6875rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+
+.chevron {
+    color: var(--color-text-tertiary);
+    transition: transform var(--transition-fast);
+}
+
+.chevron.open {
+    transform: rotate(180deg);
+}
+
+.dropdown {
+    position: absolute;
+    top: calc(100% + var(--spacing-xs));
+    right: 0;
+    min-width: 220px;
+    background: var(--color-bg-elevated);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    z-index: 100;
+    animation: dropdownFadeIn var(--transition-fast) ease-out;
+}
+
+@keyframes dropdownFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.dropdownHeader {
+    padding: var(--spacing-md);
+}
+
+.dropdownEmail {
+    font-size: 0.75rem;
+    color: var(--color-text-secondary);
+}
+
+.dropdownDivider {
+    height: 1px;
+    background: var(--color-border);
+}
+
+.dropdownItem {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    width: 100%;
+    padding: var(--spacing-sm) var(--spacing-md);
+    background: transparent;
+    border: none;
+    font-size: 0.875rem;
+    color: var(--color-text-primary);
+    cursor: pointer;
+    transition: background var(--transition-fast);
+    text-align: left;
+}
+
+.dropdownItem:hover {
+    background: var(--color-bg-tertiary);
+}
+
+.dropdownItem svg {
+    color: var(--color-text-tertiary);
+}
+
+.dropdownItem.logout {
+    color: var(--color-danger, #ef4444);
+}
+
+.dropdownItem.logout svg {
+    color: var(--color-danger, #ef4444);
+}
+
+.loginButton {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-sm) var(--spacing-md);
+    background: var(--color-accent-primary);
+    border: none;
+    border-radius: var(--radius-md);
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: white;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.loginButton:hover {
+    background: var(--color-accent-secondary);
+}

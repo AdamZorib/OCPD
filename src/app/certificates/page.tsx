@@ -2,6 +2,7 @@
 
 import { Award, Plus, FileText, Printer } from 'lucide-react';
 import { Card, Button, Badge } from '@/components/ui';
+import { DownloadCertificateButton } from '@/components/documents/DownloadCertificateButton';
 import styles from './page.module.css';
 
 interface Certificate {
@@ -326,14 +327,20 @@ export default function CertificatesPage() {
                                 <FileText size={14} />
                                 {cert.policyNumber}
                             </span>
-                            <Button
+                            <DownloadCertificateButton
+                                data={{
+                                    certificateNumber: cert.certificateNumber,
+                                    policyNumber: cert.policyNumber,
+                                    clientName: cert.clientName,
+                                    cargoDescription: cert.cargoDescription,
+                                    cargoValue: formatCurrency(cert.cargoValue),
+                                    route: cert.route,
+                                    transportDate: formatDate(cert.transportDate),
+                                    generatedAt: formatDate(cert.generatedAt)
+                                }}
                                 variant="ghost"
                                 size="sm"
-                                leftIcon={<Printer size={16} />}
-                                onClick={() => generateCertificatePDF(cert)}
-                            >
-                                Drukuj PDF
-                            </Button>
+                            />
                         </div>
                     </Card>
                 ))}

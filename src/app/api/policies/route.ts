@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { mockPolicies } from '@/lib/mock-data';
+import { prisma } from '@/lib/prisma';
 
 // GET /api/policies - List all policies
 export async function GET(request: NextRequest) {
@@ -9,44 +9,59 @@ export async function GET(request: NextRequest) {
     const scope = searchParams.get('scope') || '';
     const clientId = searchParams.get('clientId') || '';
 
-    let policies = [...mockPolicies];
+    try {
+        // Build where clause
+        const where: Record<string, unknown> = {};
+        if (status) where.status = status;
+        if (scope) where.territorialScope = scope;
+        if (clientId) where.clientId = clientId;
 
-    // Apply search filter
-    if (search) {
-        policies = policies.filter(
-            (policy) =>
-                policy.policyNumber.toLowerCase().includes(search) ||
-                policy.client?.name.toLowerCase().includes(search) ||
-                policy.client?.nip.includes(search)
-        );
+        const policies = await prisma.policy.findMany({
+            where,
+            orderBy: { createdAt: 'desc' },
+        });
+
+        // Apply search filter in memory
+        let filteredPolicies = policies;
+        if (search) {
+            filteredPolicies = policies.filter(
+                (policy) =>
+                    policy.policyNumber.toLowerCase().includes(search) ||
+                    (policy.clientName && policy.clientName.toLowerCase().includes(search)) ||
+                    policy.clientNIP.includes(search)
+            );
+        }
+
+        // Parse JSON fields and add client info for response
+        const policiesWithParsedData = filteredPolicies.map((policy) => ({
+            ...policy,
+            clauses: policy.clausesJson ? JSON.parse(policy.clausesJson) : [],
+            client: {
+                id: policy.clientId,
+                name: policy.clientName,
+                nip: policy.clientNIP,
+            },
+        }));
+
+        // Calculate stats
+        const allPolicies = await prisma.policy.findMany();
+        const activePolicies = allPolicies.filter(p => p.status === 'ACTIVE');
+        const expiredPolicies = allPolicies.filter(p => p.status === 'EXPIRED');
+        const totalPremium = activePolicies.reduce((sum, p) => sum + (p.totalPremium || 0), 0);
+
+        return NextResponse.json({
+            data: policiesWithParsedData,
+            total: policiesWithParsedData.length,
+            stats: {
+                active: activePolicies.length,
+                expired: expiredPolicies.length,
+                totalPremium,
+            },
+        });
+    } catch (error) {
+        console.error('Error fetching policies:', error);
+        return NextResponse.json({ error: 'Failed to fetch policies' }, { status: 500 });
     }
-
-    // Apply status filter
-    if (status) {
-        policies = policies.filter((policy) => policy.status === status);
-    }
-
-    // Apply scope filter
-    if (scope) {
-        policies = policies.filter((policy) => policy.territorialScope === scope);
-    }
-
-    // Apply client filter
-    if (clientId) {
-        policies = policies.filter((policy) => policy.clientId === clientId);
-    }
-
-    return NextResponse.json({
-        data: policies,
-        total: policies.length,
-        stats: {
-            active: mockPolicies.filter((p) => p.status === 'ACTIVE').length,
-            expired: mockPolicies.filter((p) => p.status === 'EXPIRED').length,
-            totalPremium: mockPolicies
-                .filter((p) => p.status === 'ACTIVE')
-                .reduce((sum, p) => sum + p.totalPremium, 0),
-        },
-    });
 }
 
 // POST /api/policies - Create a new policy
@@ -61,20 +76,54 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        const newPolicy = {
-            id: `policy-${Date.now()}`,
-            policyNumber: `OCPD/${new Date().getFullYear()}/${String(Date.now()).slice(-6)}`,
-            ...body,
-            status: 'DRAFT',
-            createdAt: new Date(),
-            updatedAt: new Date(),
-        };
+        // Get client info if available
+        let clientName = body.clientName;
+        let clientNIP = body.clientNIP;
 
-        return NextResponse.json(newPolicy, { status: 201 });
+        if (body.clientId && (!clientName || !clientNIP)) {
+            const client = await prisma.client.findUnique({
+                where: { id: body.clientId },
+            });
+            if (client) {
+                clientName = clientName || client.name;
+                clientNIP = clientNIP || client.nip;
+            }
+        }
+
+        const newPolicy = await prisma.policy.create({
+            data: {
+                policyNumber: `OCPD/${new Date().getFullYear()}/${String(Date.now()).slice(-6)}`,
+                clientId: body.clientId,
+                clientNIP: clientNIP || '',
+                clientName: clientName || null,
+                type: body.type || 'OCPD',
+                status: 'DRAFT',
+                sumInsured: body.sumInsured,
+                territorialScope: body.territorialScope,
+                basePremium: body.basePremium || null,
+                clausesPremium: body.clausesPremium || null,
+                totalPremium: body.totalPremium || null,
+                clausesJson: body.clauses ? JSON.stringify(body.clauses) : null,
+                validFrom: body.validFrom ? new Date(body.validFrom) : null,
+                validTo: body.validTo ? new Date(body.validTo) : null,
+                brokerId: 'broker-1',
+            },
+        });
+
+        return NextResponse.json({
+            ...newPolicy,
+            clauses: newPolicy.clausesJson ? JSON.parse(newPolicy.clausesJson) : [],
+            client: {
+                id: newPolicy.clientId,
+                name: newPolicy.clientName,
+                nip: newPolicy.clientNIP,
+            },
+        }, { status: 201 });
     } catch (error) {
+        console.error('Error creating policy:', error);
         return NextResponse.json(
-            { error: 'Invalid request body' },
-            { status: 400 }
+            { error: 'Failed to create policy' },
+            { status: 500 }
         );
     }
 }

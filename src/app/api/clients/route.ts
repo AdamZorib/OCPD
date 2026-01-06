@@ -1,41 +1,44 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { mockClients } from '@/lib/mock-data';
+import { prisma } from '@/lib/prisma';
 
 // GET /api/clients - List all clients
 export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const search = searchParams.get('search')?.toLowerCase() || '';
-    const riskLevel = searchParams.get('riskLevel') || '';
-    const scope = searchParams.get('scope') || '';
 
-    let clients = [...mockClients];
+    try {
+        const clients = await prisma.client.findMany({
+            orderBy: { createdAt: 'desc' },
+        });
 
-    // Apply search filter
-    if (search) {
-        clients = clients.filter(
-            (client) =>
-                client.name.toLowerCase().includes(search) ||
-                client.nip.includes(search) ||
-                client.email.toLowerCase().includes(search)
-        );
+        // Apply search filter in memory (SQLite doesn't have great full-text search)
+        let filteredClients = clients;
+        if (search) {
+            filteredClients = clients.filter(
+                (client) =>
+                    client.name.toLowerCase().includes(search) ||
+                    client.nip.includes(search) ||
+                    (client.email && client.email.toLowerCase().includes(search))
+            );
+        }
+
+        // Parse JSON fields for response
+        const clientsWithParsedData = filteredClients.map((client) => ({
+            ...client,
+            regonData: client.regonDataJson ? JSON.parse(client.regonDataJson) : null,
+            riskProfile: client.riskProfileJson ? JSON.parse(client.riskProfileJson) : null,
+            fleet: client.fleetJson ? JSON.parse(client.fleetJson) : [],
+            claimsHistory: client.claimsHistoryJson ? JSON.parse(client.claimsHistoryJson) : [],
+        }));
+
+        return NextResponse.json({
+            data: clientsWithParsedData,
+            total: clientsWithParsedData.length,
+        });
+    } catch (error) {
+        console.error('Error fetching clients:', error);
+        return NextResponse.json({ error: 'Failed to fetch clients' }, { status: 500 });
     }
-
-    // Apply risk level filter
-    if (riskLevel) {
-        clients = clients.filter((client) => client.riskProfile.riskLevel === riskLevel);
-    }
-
-    // Apply scope filter
-    if (scope) {
-        clients = clients.filter((client) =>
-            client.riskProfile.mainRoutes.includes(scope as 'POLAND' | 'EUROPE' | 'WORLD')
-        );
-    }
-
-    return NextResponse.json({
-        data: clients,
-        total: clients.length,
-    });
 }
 
 // POST /api/clients - Create a new client
@@ -44,48 +47,53 @@ export async function POST(request: NextRequest) {
         const body = await request.json();
 
         // Validate required fields
-        if (!body.nip || !body.name || !body.email) {
+        if (!body.nip || !body.name) {
             return NextResponse.json(
-                { error: 'NIP, name, and email are required' },
+                { error: 'NIP and name are required' },
                 { status: 400 }
             );
         }
 
-        // In a real app, we would save to database
-        // For demo purposes, we add to mock data (persists during server session)
-        const newClient = {
-            id: `client-${Date.now()}`,
-            nip: body.nip,
-            name: body.name,
-            email: body.email,
-            phone: body.phone || '',
-            brokerId: 'broker-1', // Default broker ID for demo
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            regonData: body.regonData || null,
-            fleet: body.fleet || [],
-            claimsHistory: [],
-            riskProfile: body.riskProfile || {
-                overallScore: 70,
-                riskLevel: 'MEDIUM' as const,
-                yearsInBusiness: body.yearsInBusiness || 1,
-                claimsRatio: 0,
-                bonusMalus: 0,
-                transportTypes: [],
-                mainRoutes: ['POLAND'] as ('POLAND' | 'EUROPE' | 'WORLD')[],
-                hasADRCertificate: false,
-                hasTAPACertificate: false,
+        const newClient = await prisma.client.create({
+            data: {
+                nip: body.nip,
+                name: body.name,
+                email: body.email || null,
+                phone: body.phone || null,
+                street: body.regonData?.address?.street || null,
+                city: body.regonData?.address?.city || null,
+                postalCode: body.regonData?.address?.postalCode || null,
+                voivodeship: body.regonData?.address?.voivodeship || null,
+                regonDataJson: body.regonData ? JSON.stringify(body.regonData) : null,
+                riskProfileJson: body.riskProfile ? JSON.stringify(body.riskProfile) : JSON.stringify({
+                    overallScore: 70,
+                    riskLevel: 'MEDIUM',
+                    yearsInBusiness: body.yearsInBusiness || 1,
+                    claimsRatio: 0,
+                    bonusMalus: 0,
+                    transportTypes: [],
+                    mainRoutes: ['POLAND'],
+                    hasADRCertificate: false,
+                    hasTAPACertificate: false,
+                }),
+                fleetJson: body.fleet ? JSON.stringify(body.fleet) : '[]',
+                claimsHistoryJson: '[]',
+                brokerId: 'broker-1',
             },
-        };
+        });
 
-        // Add to mock data for demo persistence
-        mockClients.push(newClient as typeof mockClients[0]);
-
-        return NextResponse.json(newClient, { status: 201 });
+        return NextResponse.json({
+            ...newClient,
+            regonData: newClient.regonDataJson ? JSON.parse(newClient.regonDataJson) : null,
+            riskProfile: newClient.riskProfileJson ? JSON.parse(newClient.riskProfileJson) : null,
+            fleet: newClient.fleetJson ? JSON.parse(newClient.fleetJson) : [],
+            claimsHistory: [],
+        }, { status: 201 });
     } catch (error) {
+        console.error('Error creating client:', error);
         return NextResponse.json(
-            { error: 'Invalid request body' },
-            { status: 400 }
+            { error: 'Failed to create client' },
+            { status: 500 }
         );
     }
 }

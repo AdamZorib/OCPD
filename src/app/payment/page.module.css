@@ -1,0 +1,344 @@
+.page {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xl);
+    max-width: 1200px;
+    margin: 0 auto;
+    animation: fadeIn var(--transition-base) ease-out;
+}
+
+.header {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+}
+
+.backLink {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    font-size: 0.875rem;
+    color: var(--color-text-secondary);
+    text-decoration: none;
+    transition: color var(--transition-fast);
+}
+
+.backLink:hover {
+    color: var(--color-text-primary);
+}
+
+.title {
+    font-size: 1.875rem;
+    font-weight: 700;
+    color: var(--color-text-primary);
+    margin: 0;
+}
+
+.subtitle {
+    font-size: 0.9375rem;
+    color: var(--color-text-secondary);
+    margin: 0;
+}
+
+.content {
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    gap: var(--spacing-xl);
+}
+
+@media (max-width: 900px) {
+    .content {
+        grid-template-columns: 1fr;
+    }
+}
+
+.paymentOptions {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-lg);
+}
+
+/* Installment Options */
+.installmentGrid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--spacing-md);
+}
+
+@media (max-width: 600px) {
+    .installmentGrid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.installmentCard {
+    padding: var(--spacing-lg);
+    background: var(--color-bg-tertiary);
+    border: 2px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    text-align: center;
+}
+
+.installmentCard:hover {
+    border-color: var(--color-border-hover);
+}
+
+.installmentCard.selected {
+    border-color: var(--color-accent-primary);
+    background: rgba(99, 102, 241, 0.05);
+}
+
+.installmentHeader {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: var(--spacing-sm);
+    margin-bottom: var(--spacing-sm);
+}
+
+.installmentLabel {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--color-text-primary);
+}
+
+.installmentAmount {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--color-accent-primary);
+}
+
+/* Payment Methods */
+.methodsList {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+}
+
+.methodCard {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+    padding: var(--spacing-lg);
+    background: var(--color-bg-tertiary);
+    border: 2px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.methodCard:hover {
+    border-color: var(--color-border-hover);
+}
+
+.methodCard.selected {
+    border-color: var(--color-accent-primary);
+    background: rgba(99, 102, 241, 0.05);
+}
+
+.methodLogo {
+    font-size: 1.5rem;
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--color-bg-elevated);
+    border-radius: var(--radius-md);
+}
+
+.methodInfo {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+}
+
+.methodName {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+}
+
+.methodDesc {
+    font-size: 0.8125rem;
+    color: var(--color-text-secondary);
+}
+
+.methodCheck {
+    color: var(--color-accent-primary);
+}
+
+/* Bank Info */
+.bankInfo {
+    background: var(--color-bg-secondary);
+}
+
+.bankInfoContent {
+    display: flex;
+    gap: var(--spacing-lg);
+}
+
+.bankInfoContent svg {
+    color: var(--color-accent-primary);
+    flex-shrink: 0;
+}
+
+.bankInfoContent h4 {
+    margin: 0 0 var(--spacing-sm) 0;
+    color: var(--color-text-primary);
+}
+
+.bankInfoContent p {
+    margin: var(--spacing-xs) 0;
+    font-size: 0.875rem;
+    color: var(--color-text-secondary);
+}
+
+.bankInfoContent strong {
+    color: var(--color-text-primary);
+}
+
+/* Summary */
+.summary {
+    position: sticky;
+    top: var(--spacing-xl);
+    align-self: start;
+}
+
+.summaryDetails {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+}
+
+.summaryRow {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.875rem;
+}
+
+.summaryRow span:first-child {
+    color: var(--color-text-secondary);
+}
+
+.summaryRow strong {
+    color: var(--color-text-primary);
+}
+
+.summaryDivider {
+    height: 1px;
+    background: var(--color-border);
+    margin: var(--spacing-lg) 0;
+}
+
+.priceBreakdown {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+}
+
+.totalRow {
+    padding-top: var(--spacing-md);
+    border-top: 1px solid var(--color-border);
+    font-size: 1rem;
+}
+
+.totalRow strong {
+    font-size: 1.25rem;
+    color: var(--color-accent-primary);
+}
+
+.payButton {
+    width: 100%;
+    margin-top: var(--spacing-lg);
+}
+
+.securityNote {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-sm);
+    margin-top: var(--spacing-md);
+    font-size: 0.75rem;
+    color: var(--color-text-tertiary);
+}
+
+.securityNote svg {
+    color: var(--color-success);
+}
+
+/* Success State */
+.successCard {
+    max-width: 500px;
+    margin: 0 auto;
+}
+
+.successContent {
+    text-align: center;
+}
+
+.successIcon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 80px;
+    height: 80px;
+    margin: 0 auto var(--spacing-lg);
+    background: var(--color-success);
+    border-radius: var(--radius-full);
+    color: white;
+}
+
+.successContent h1 {
+    font-size: 1.5rem;
+    margin: 0 0 var(--spacing-sm) 0;
+    color: var(--color-text-primary);
+}
+
+.successContent>p {
+    color: var(--color-text-secondary);
+    margin: 0 0 var(--spacing-xl) 0;
+}
+
+.successDetails {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+    padding: var(--spacing-lg);
+    background: var(--color-bg-tertiary);
+    border-radius: var(--radius-md);
+    margin-bottom: var(--spacing-xl);
+}
+
+.successDetails>div {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.875rem;
+}
+
+.successDetails span {
+    color: var(--color-text-secondary);
+}
+
+.successDetails strong {
+    color: var(--color-text-primary);
+}
+
+.successActions {
+    display: flex;
+    gap: var(--spacing-md);
+    justify-content: center;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
