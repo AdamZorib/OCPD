@@ -24,6 +24,7 @@ import {
     TableCell,
     Select,
 } from '@/components/ui';
+import { PolicyResponse, PolicyListResponse } from '@/types/api';
 import styles from './page.module.css';
 
 const statusLabels: Record<string, string> = {
@@ -67,7 +68,8 @@ const scopeOptions = [
     { value: 'WORLD', label: 'Świat' },
 ];
 
-const formatCurrency = (value: number) => {
+const formatCurrency = (value: number | null | undefined) => {
+    if (value == null) return '-';
     return new Intl.NumberFormat('pl-PL', {
         style: 'currency',
         currency: 'PLN',
@@ -75,20 +77,34 @@ const formatCurrency = (value: number) => {
     }).format(value);
 };
 
-const formatDate = (date: Date) => {
-    return new Intl.DateTimeFormat('pl-PL', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-    }).format(date);
+const formatDate = (dateString: string | null | undefined) => {
+    if (!dateString) return '-';
+    try {
+        const date = new Date(dateString);
+        if (isNaN(date.getTime())) return '-';
+        return new Intl.DateTimeFormat('pl-PL', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+        }).format(date);
+    } catch {
+        return '-';
+    }
 };
 
-const daysUntilExpiry = (date: Date) => {
-    return Math.ceil((date.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+const daysUntilExpiry = (dateString: string | null | undefined): number => {
+    if (!dateString) return 0;
+    try {
+        const date = new Date(dateString);
+        if (isNaN(date.getTime())) return 0;
+        return Math.ceil((date.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+    } catch {
+        return 0;
+    }
 };
 
 export default function PoliciesPage() {
-    const [policies, setPolicies] = useState<any[]>([]);
+    const [policies, setPolicies] = useState<PolicyResponse[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [search, setSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState('');
@@ -98,7 +114,12 @@ export default function PoliciesPage() {
         const fetchPolicies = async () => {
             try {
                 const res = await fetch('/api/policies');
-                const data = await res.json();
+                if (!res.ok) {
+                    console.error('Failed to fetch policies:', res.status);
+                    setPolicies([]);
+                    return;
+                }
+                const data: PolicyListResponse = await res.json();
                 setPolicies(data.data || []);
             } catch (err) {
                 console.error('Failed to fetch policies:', err);
@@ -129,7 +150,7 @@ export default function PoliciesPage() {
     const activeCount = useMemo(() => policies.filter(p => p.status === 'ACTIVE').length, [policies]);
     const expiringCount = useMemo(() => policies.filter(p => {
         if (!p.validTo) return false;
-        const days = daysUntilExpiry(new Date(p.validTo));
+        const days = daysUntilExpiry(p.validTo);
         return p.status === 'ACTIVE' && days <= 30 && days > 0;
     }).length, [policies]);
     const totalPremium = useMemo(() => policies
@@ -229,7 +250,7 @@ export default function PoliciesPage() {
                     </TableHeader>
                     <TableBody>
                         {filteredPolicies.map((policy) => {
-                            const days = policy.validTo ? daysUntilExpiry(new Date(policy.validTo)) : 0;
+                            const days = daysUntilExpiry(policy.validTo);
                             const isExpiring = policy.status === 'ACTIVE' && days <= 30 && days > 0;
 
                             return (
@@ -255,10 +276,10 @@ export default function PoliciesPage() {
                                     <TableCell className={styles.premiumCell}>
                                         {formatCurrency(policy.totalPremium)}
                                     </TableCell>
-                                    <TableCell>{policy.validFrom ? formatDate(new Date(policy.validFrom)) : '-'}</TableCell>
+                                    <TableCell>{formatDate(policy.validFrom)}</TableCell>
                                     <TableCell>
                                         <span className={isExpiring ? styles.expiringDate : ''}>
-                                            {policy.validTo ? formatDate(new Date(policy.validTo)) : '-'}
+                                            {formatDate(policy.validTo)}
                                             {isExpiring && <span className={styles.expiringBadge}>{days} dni</span>}
                                         </span>
                                     </TableCell>

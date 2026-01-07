@@ -1,8 +1,8 @@
 import { PrismaBetterSqlite3 } from '@prisma/adapter-better-sqlite3';
-import { PrismaClient } from '../generated/prisma/client';
+import { PrismaClient } from '@prisma/client';
 
 const globalForPrisma = globalThis as unknown as {
-    prisma: PrismaClient | undefined;
+    prismaInstance: PrismaClient | undefined;
 };
 
 function createPrismaClient() {
@@ -11,7 +11,7 @@ function createPrismaClient() {
     return new PrismaClient({ adapter });
 }
 
-export const prisma = globalForPrisma.prisma ?? createPrismaClient();
+export const prisma = globalForPrisma.prismaInstance ?? createPrismaClient();
 
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
+if (process.env.NODE_ENV !== 'production') globalForPrisma.prismaInstance = prisma;
 

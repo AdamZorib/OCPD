@@ -3,7 +3,6 @@
 
 generator client {
   provider = "prisma-client-js"
-  output   = "../src/generated/prisma"
 }
 
 datasource db {
@@ -47,12 +46,18 @@ model Quote {
   // Vehicles (stored as JSON string)
   vehiclesJson          String?
   
-  // Status
+  // Status: DRAFT, CALCULATED, SENT, ACCEPTED, REJECTED, EXPIRED
   status                String   @default("DRAFT")
   brokerId              String?
   
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
+
+  // Indexes for common queries
+  @@index([clientNIP])
+  @@index([status])
+  @@index([brokerId])
+  @@index([createdAt])
 }
 
 model Policy {
@@ -61,10 +66,13 @@ model Policy {
   clientId              String
   clientNIP             String
   clientName            String?
+  // Type: OCPD, OCP, OCS
   type                  String   @default("OCPD")
+  // Status: DRAFT, QUOTED, ACTIVE, EXPIRED, CANCELLED
   status                String   @default("DRAFT")
   
   sumInsured            Float
+  // Scope: POLAND, EUROPE, WORLD
   territorialScope      String
   basePremium           Float?
   clausesPremium        Float?
@@ -89,11 +97,23 @@ model Policy {
   
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
+
+  // Relations
+  client                Client   @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  claims                Claim[]
+
+  // Indexes for common queries
+  @@index([clientId])
+  @@index([status])
+  @@index([brokerId])
+  @@index([validTo])
+  @@index([createdAt])
 }
 
 model Client {
   id                    String   @id @default(cuid())
   nip                   String   @unique
+  regon                 String?
   name                  String
   email                 String?
   phone                 String?
@@ -115,6 +135,14 @@ model Client {
   
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
+
+  // Relations
+  policies              Policy[]
+  claims                Claim[]
+
+  // Indexes for common queries
+  @@index([brokerId])
+  @@index([createdAt])
 }
 
 model Claim {
@@ -129,9 +157,20 @@ model Claim {
   claimedAmount  Float
   reservedAmount Float?
   paidAmount     Float?
+  // Status: REPORTED, UNDER_REVIEW, APPROVED, REJECTED, PAID, CLOSED
   status         String   @default("REPORTED")
   documentsJson  String?
   
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+
+  // Relations
+  policy         Policy   @relation(fields: [policyId], references: [id], onDelete: Restrict)
+  client         Client   @relation(fields: [clientId], references: [id], onDelete: Restrict)
+
+  // Indexes for common queries
+  @@index([policyId])
+  @@index([clientId])
+  @@index([status])
+  @@index([createdAt])
 }

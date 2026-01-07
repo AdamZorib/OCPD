@@ -1,13 +1,41 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { safeJsonParse } from '@/lib/utils/safe-json';
+import { createClientSchema, validateInput } from '@/lib/validation/schemas';
+import { getAuthFromRequest, getBrokerId, checkRateLimit, requirePermission } from '@/lib/auth/server';
+import { ClientListResponse, ClientResponse, ApiValidationError } from '@/types/api';
 
 // GET /api/clients - List all clients
 export async function GET(request: NextRequest) {
+    // Auth check
+    const auth = getAuthFromRequest(request);
+    const authCheck = requirePermission(auth, 'clients:read');
+    if (!authCheck.authorized) {
+        return NextResponse.json(
+            { error: authCheck.error || 'Unauthorized' },
+            { status: auth.authenticated ? 403 : 401 }
+        );
+    }
+
+    // Rate limiting
+    const rateLimit = checkRateLimit(auth.user?.id || 'anonymous');
+    if (!rateLimit.allowed) {
+        return NextResponse.json(
+            { error: 'Zbyt wiele żądań. Spróbuj ponownie za chwilę.' },
+            { status: 429 }
+        );
+    }
+
     const searchParams = request.nextUrl.searchParams;
     const search = searchParams.get('search')?.toLowerCase() || '';
 
     try {
+        // Build where clause based on user's access level
+        const brokerId = getBrokerId(auth);
+        const where = brokerId ? { brokerId } : {};
+
         const clients = await prisma.client.findMany({
+            where,
             orderBy: { createdAt: 'desc' },
         });
 
@@ -22,19 +50,23 @@ export async function GET(request: NextRequest) {
             );
         }
 
-        // Parse JSON fields for response
-        const clientsWithParsedData = filteredClients.map((client) => ({
+        // Parse JSON fields safely for response
+        const clientsWithParsedData: ClientResponse[] = filteredClients.map((client) => ({
             ...client,
-            regonData: client.regonDataJson ? JSON.parse(client.regonDataJson) : null,
-            riskProfile: client.riskProfileJson ? JSON.parse(client.riskProfileJson) : null,
-            fleet: client.fleetJson ? JSON.parse(client.fleetJson) : [],
-            claimsHistory: client.claimsHistoryJson ? JSON.parse(client.claimsHistoryJson) : [],
+            regonData: safeJsonParse(client.regonDataJson, null),
+            riskProfile: safeJsonParse(client.riskProfileJson, null),
+            fleet: safeJsonParse(client.fleetJson, []),
+            claimsHistory: safeJsonParse(client.claimsHistoryJson, []),
+            createdAt: client.createdAt.toISOString(),
+            updatedAt: client.updatedAt.toISOString(),
         }));
 
-        return NextResponse.json({
+        const response: ClientListResponse = {
             data: clientsWithParsedData,
             total: clientsWithParsedData.length,
-        });
+        };
+
+        return NextResponse.json(response);
     } catch (error) {
         console.error('Error fetching clients:', error);
         return NextResponse.json({ error: 'Failed to fetch clients' }, { status: 500 });
@@ -43,32 +75,62 @@ export async function GET(request: NextRequest) {
 
 // POST /api/clients - Create a new client
 export async function POST(request: NextRequest) {
+    // Auth check
+    const auth = getAuthFromRequest(request);
+    const authCheck = requirePermission(auth, 'clients:create');
+    if (!authCheck.authorized) {
+        return NextResponse.json(
+            { error: authCheck.error || 'Unauthorized' },
+            { status: auth.authenticated ? 403 : 401 }
+        );
+    }
+
     try {
         const body = await request.json();
 
-        // Validate required fields
-        if (!body.nip || !body.name) {
+        // Validate input with Zod
+        const validation = validateInput(createClientSchema, body);
+        if (!validation.success) {
+            const errorResponse: ApiValidationError = {
+                error: 'Błędy walidacji',
+                validationErrors: validation.errors || [],
+            };
+            return NextResponse.json(errorResponse, { status: 400 });
+        }
+
+        const data = validation.data!;
+
+        // Check if NIP already exists
+        const existingClient = await prisma.client.findUnique({
+            where: { nip: data.nip },
+        });
+
+        if (existingClient) {
             return NextResponse.json(
-                { error: 'NIP and name are required' },
-                { status: 400 }
+                { error: 'Klient o podanym NIP już istnieje' },
+                { status: 409 }
             );
         }
 
+        // Extract address from regonData if available
+        const regonAddress = data.regonData?.address as Record<string, string> | undefined;
+
         const newClient = await prisma.client.create({
             data: {
-                nip: body.nip,
-                name: body.name,
-                email: body.email || null,
-                phone: body.phone || null,
-                street: body.regonData?.address?.street || null,
-                city: body.regonData?.address?.city || null,
-                postalCode: body.regonData?.address?.postalCode || null,
-                voivodeship: body.regonData?.address?.voivodeship || null,
-                regonDataJson: body.regonData ? JSON.stringify(body.regonData) : null,
-                riskProfileJson: body.riskProfile ? JSON.stringify(body.riskProfile) : JSON.stringify({
+                nip: data.nip,
+                name: data.name,
+                email: data.email || null,
+                phone: data.phone || null,
+                street: regonAddress?.street || data.street || null,
+                city: regonAddress?.city || data.city || null,
+                postalCode: regonAddress?.postalCode || data.postalCode || null,
+                voivodeship: regonAddress?.voivodeship || data.voivodeship || null,
+                regon: data.regon || null,
+                regonDataJson: data.regonData ? JSON.stringify(data.regonData) : null,
+                riskProfileJson: data.riskProfile ? JSON.stringify(data.riskProfile) : JSON.stringify({
                     overallScore: 70,
                     riskLevel: 'MEDIUM',
-                    yearsInBusiness: body.yearsInBusiness || 1,
+                    yearsInBusiness: data.yearsInBusiness || 1,
                     claimsRatio: 0,
                     bonusMalus: 0,
                     transportTypes: [],
@@ -76,23 +138,27 @@ export async function POST(request: NextRequest) {
                     hasADRCertificate: false,
                     hasTAPACertificate: false,
                 }),
-                fleetJson: body.fleet ? JSON.stringify(body.fleet) : '[]',
+                fleetJson: data.fleet ? JSON.stringify(data.fleet) : '[]',
                 claimsHistoryJson: '[]',
-                brokerId: 'broker-1',
+                brokerId: auth.user?.brokerId || auth.user?.id || 'system',
             },
         });
 
-        return NextResponse.json({
+        const response: ClientResponse = {
             ...newClient,
-            regonData: newClient.regonDataJson ? JSON.parse(newClient.regonDataJson) : null,
-            riskProfile: newClient.riskProfileJson ? JSON.parse(newClient.riskProfileJson) : null,
-            fleet: newClient.fleetJson ? JSON.parse(newClient.fleetJson) : [],
+            regonData: safeJsonParse(newClient.regonDataJson, null),
+            riskProfile: safeJsonParse(newClient.riskProfileJson, null),
+            fleet: safeJsonParse(newClient.fleetJson, []),
             claimsHistory: [],
-        }, { status: 201 });
-    } catch (error) {
+            createdAt: newClient.createdAt.toISOString(),
+            updatedAt: newClient.updatedAt.toISOString(),
+        };
+
+        return NextResponse.json(response, { status: 201 });
+    } catch (error: any) {
         console.error('Error creating client:', error);
         return NextResponse.json(
-            { error: 'Failed to create client' },
+            { error: 'Failed to create client', details: error.message },
             { status: 500 }
         );
     }

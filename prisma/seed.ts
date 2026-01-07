@@ -1,5 +1,5 @@
 import { PrismaBetterSqlite3 } from '@prisma/adapter-better-sqlite3';
-import { PrismaClient } from '../src/generated/prisma/client';
+import { PrismaClient } from '@prisma/client';
 
 // Path relative to prisma folder where seed.ts is located
 const adapter = new PrismaBetterSqlite3({ url: "file:./prisma/dev.db" });
