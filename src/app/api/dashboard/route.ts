@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { safeJsonParse } from '@/lib/utils/safe-json';
+import { toNumber, addDecimals } from '@/lib/utils/decimal';
 import { getAuthFromRequest, getBrokerId, checkRateLimit, requirePermission } from '@/lib/auth/server';
 import { DashboardStats } from '@/types/api';
 
@@ -68,8 +69,8 @@ export async function GET(request: NextRequest) {
         );
 
         // Calculate totals
-        const totalPremium = activePolicies.reduce((sum, p) => sum + (p.totalPremium || 0), 0);
-        const totalClaims = claims.reduce((sum, c) => sum + (c.paidAmount || 0), 0);
+        const totalPremium = activePolicies.reduce((sum, p) => addDecimals(sum, p.totalPremium || 0), 0);
+        const totalClaims = claims.reduce((sum, c) => addDecimals(sum, c.paidAmount || 0), 0);
         const claimsRatio = totalPremium > 0 ? totalClaims / totalPremium : 0;
 
         // Get top clients by premium
@@ -79,7 +80,7 @@ export async function GET(request: NextRequest) {
             if (!clientPremiums[key]) {
                 clientPremiums[key] = { name: policy.clientName || 'Unknown', premium: 0 };
             }
-            clientPremiums[key].premium += policy.totalPremium || 0;
+            clientPremiums[key].premium = addDecimals(clientPremiums[key].premium, policy.totalPremium || 0);
         }
         const topClients = Object.values(clientPremiums)
             .sort((a, b) => b.premium - a.premium)
@@ -99,7 +100,7 @@ export async function GET(request: NextRequest) {
                     id: p.id,
                     policyNumber: p.policyNumber,
                     clientName: p.clientName,
-                    premium: p.totalPremium,
+                    premium: p.totalPremium ? toNumber(p.totalPremium) : null,
                     validTo: p.validTo?.toISOString() || null,
                     status: p.status as DashboardStats['recentActivity']['newPolicies'][0]['status'],
                     date: p.issuedAt?.toISOString() || null,
@@ -108,7 +109,7 @@ export async function GET(request: NextRequest) {
                     id: c.id,
                     claimNumber: c.claimNumber,
                     description: c.description,
-                    amount: c.claimedAmount,
+                    amount: toNumber(c.claimedAmount),
                     status: c.status as DashboardStats['recentActivity']['openClaimsList'][0]['status'],
                     date: c.reportedDate.toISOString(),
                 })),
@@ -120,7 +121,7 @@ export async function GET(request: NextRequest) {
                     return {
                         id: q.id,
                         clientNIP: q.clientNIP,
-                        sumInsured: q.sumInsured,
+                        sumInsured: toNumber(q.sumInsured),
                         premium: calcResult.breakdown?.totalPremium || null,
                         status: q.status as DashboardStats['recentActivity']['pendingQuotesList'][0]['status'],
                     };

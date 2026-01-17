@@ -1,6 +1,9 @@
 /**
  * Next.js Middleware for API Authentication
  * Provides centralized auth checks instead of per-route code
+ * 
+ * NOTE: Full JWT verification happens in route handlers because jsonwebtoken
+ * is not compatible with Edge runtime. Middleware only checks token presence.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -54,19 +57,22 @@ export function middleware(request: NextRequest) {
         return NextResponse.next();
     }
 
-    // In development mode, allow requests without token (logged once at startup)
-    if (process.env.NODE_ENV === 'development' && process.env.DISABLE_AUTH !== 'false') {
+    // SECURITY FIX: Dev bypass now requires explicit DISABLE_AUTH=true
+    const IS_DEV_MODE = process.env.NODE_ENV?.toLowerCase() === 'development';
+    const IS_DEV_BYPASS = IS_DEV_MODE && process.env.DISABLE_AUTH === 'true';
+
+    if (IS_DEV_BYPASS) {
         const response = NextResponse.next();
         response.headers.set('X-Auth-Dev-Bypass', 'true');
         return response;
     }
 
-    // For protected API routes, check for auth token presence
+    // For protected API routes, require token presence
+    // Full JWT verification happens in route handlers (jsonwebtoken not Edge-compatible)
     const cookieToken = request.cookies.get('ocpd_auth_token')?.value;
     const headerToken = request.headers.get('x-auth-token');
     const hasToken = cookieToken || headerToken;
 
-    // In production, require token presence
     if (!hasToken) {
         return NextResponse.json(
             { error: 'Brak tokenu autoryzacji' },
@@ -74,7 +80,7 @@ export function middleware(request: NextRequest) {
         );
     }
 
-    // Token exists, let the route handler do full JWT verification
+    // Token exists - let route handler do full JWT verification
     return NextResponse.next();
 }
 

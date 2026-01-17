@@ -21,8 +21,8 @@
 │  └──────────────────────┬──────────────────────┘           │
 │       │           │           │           │                  │
 │  ┌────┴────┐ ┌────┴────┐ ┌────┴────┐ ┌────┴────┐           │
-│  │/clients │ │/policies│ │ /quotes │ │ /claims │           │
-│  └─────────┘ └─────────┘ └─────────┘ └─────────┘           │
+│  │/clients │ │/policies│ │ /quotes │ │ /claims │ │ /certs  │           │
+│  └─────────┘ └─────────┘ └─────────┘ └─────────┘ └─────────┘           │
 └─────────────────────────────────────────────────────────────┘
                           │
 ┌─────────────────────────┼───────────────────────────────────┐
@@ -262,6 +262,17 @@ model Policy {
   clauses         PolicyClause[]
   claims          Claim[]
   createdAt       DateTime @default(now())
+}
+
+model InsuranceCertificate {
+  id                String   @id @default(cuid())
+  certificateNumber String   @unique
+  policyId          String
+  policy            Policy   @relation(fields: [policyId], references: [id])
+  clientId          String
+  client            Client   @relation(fields: [clientId], references: [id])
+  cargoValue        Decimal
+  generatedAt       DateTime @default(now())
 }
 ```
 

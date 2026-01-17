@@ -69,7 +69,7 @@ async function main() {
                 }),
                 fleetJson: '[]',
                 claimsHistoryJson: '[]',
-                brokerId: 'broker-1',
+                brokerId: 'dev-broker',
             },
         }),
         prisma.client.create({
@@ -94,7 +94,7 @@ async function main() {
                     hasADRCertificate: false,
                     hasTAPACertificate: false,
                 }),
-                brokerId: 'broker-1',
+                brokerId: 'dev-broker',
             },
         }),
         prisma.client.create({
@@ -119,7 +119,7 @@ async function main() {
                     hasADRCertificate: true,
                     hasTAPACertificate: true,
                 }),
-                brokerId: 'broker-1',
+                brokerId: 'dev-broker',
             },
         }),
         prisma.client.create({
@@ -144,7 +144,7 @@ async function main() {
                     hasADRCertificate: false,
                     hasTAPACertificate: false,
                 }),
-                brokerId: 'broker-1',
+                brokerId: 'dev-broker',
             },
         }),
     ]);
@@ -175,7 +175,7 @@ async function main() {
                 issuedAt: daysAgo(180),
                 apkCompleted: true,
                 ipidGenerated: true,
-                brokerId: 'broker-1',
+                brokerId: 'dev-broker',
             },
         }),
         prisma.policy.create({
@@ -197,7 +197,7 @@ async function main() {
                 issuedAt: daysAgo(90),
                 apkCompleted: true,
                 ipidGenerated: true,
-                brokerId: 'broker-1',
+                brokerId: 'dev-broker',
             },
         }),
         prisma.policy.create({
@@ -219,7 +219,7 @@ async function main() {
                 issuedAt: daysAgo(60),
                 apkCompleted: true,
                 ipidGenerated: true,
-                brokerId: 'broker-1',
+                brokerId: 'dev-broker',
             },
         }),
         prisma.policy.create({
@@ -241,7 +241,7 @@ async function main() {
                 issuedAt: daysAgo(330),
                 apkCompleted: true,
                 ipidGenerated: true,
-                brokerId: 'broker-1',
+                brokerId: 'dev-broker',
             },
         }),
     ]);
@@ -313,7 +313,7 @@ async function main() {
                 }),
                 calculationResultJson: JSON.stringify({ totalPremium: 5200 }),
                 status: 'CALCULATED',
-                brokerId: 'broker-1',
+                brokerId: 'dev-broker',
             },
         }),
         prisma.quote.create({
@@ -324,7 +324,7 @@ async function main() {
                 selectedClauses: 'GROSS_NEGLIGENCE',
                 calculationResultJson: JSON.stringify({ totalPremium: 1800 }),
                 status: 'SENT',
-                brokerId: 'broker-1',
+                brokerId: 'dev-broker',
             },
         }),
     ]);

@@ -4,6 +4,7 @@ import { safeJsonParse } from '@/lib/utils/safe-json';
 import { updateClientSchema, validateInput } from '@/lib/validation/schemas';
 import { getAuthFromRequest, getBrokerId, requirePermission } from '@/lib/auth/server';
 import { ClientResponse, ApiValidationError } from '@/types/api';
+import { OPEN_CLAIM_STATUSES, ACTIVE_POLICY_STATUSES } from '@/lib/constants/statuses';
 
 // GET /api/clients/[id] - Get a single client
 export async function GET(
@@ -24,13 +25,13 @@ export async function GET(
     const brokerId = getBrokerId(auth);
 
     try {
-        const [client, policies, claims] = await Promise.all([
-            prisma.client.findFirst({
-                where: brokerId ? { id, brokerId } : { id }
-            }),
-            prisma.policy.findMany({ where: { clientId: id } }),
-            prisma.claim.findMany({ where: { clientId: id } }),
-        ]);
+        // SECURITY FIX: Fetch client FIRST to verify ownership before loading related data
+        // Also filter out soft-deleted clients
+        const client = await prisma.client.findFirst({
+            where: brokerId
+                ? { id, brokerId, deletedAt: null }
+                : { id, deletedAt: null }
+        });
 
         if (!client) {
             return NextResponse.json(
@@ -38,6 +39,20 @@ export async function GET(
                 { status: 404 }
             );
         }
+
+        // Only fetch related data AFTER verifying ownership
+        // SECURITY FIX: Also filter policies by brokerId and exclude soft-deleted
+        const [policies, claims] = await Promise.all([
+            prisma.policy.findMany({
+                where: brokerId
+                    ? { clientId: id, brokerId, deletedAt: null }
+                    : { clientId: id, deletedAt: null }
+            }),
+            prisma.claim.findMany({
+                where: { clientId: id, deletedAt: null }
+                // Claims are tied to client ownership already verified above
+            }),
+        ]);
 
         const response: ClientResponse & { policies: unknown[]; claims: unknown[] } = {
             ...client,
@@ -91,11 +106,36 @@ export async function PUT(
 
         const data = validation.data!;
 
+        // SECURITY FIX: Verify ownership before update
+        const existingClient = await prisma.client.findFirst({
+            where: brokerId ? { id, brokerId } : { id }
+        });
+
+        if (!existingClient) {
+            return NextResponse.json(
+                { error: 'Client not found' },
+                { status: 404 }
+            );
+        }
+
+        // OPTIMISTIC LOCKING: Check version to prevent concurrent edit overwrites
+        const expectedVersion = body.version as number | undefined;
+        if (expectedVersion !== undefined && expectedVersion !== existingClient.version) {
+            return NextResponse.json(
+                {
+                    error: 'Konflikt wersji - dane zostały zmienione przez innego użytkownika',
+                    currentVersion: existingClient.version,
+                    expectedVersion: expectedVersion
+                },
+                { status: 409 }
+            );
+        }
+
         // Extract address from regonData if available
         const regonAddress = data.regonData?.address as Record<string, string> | undefined;
 
         const updatedClient = await prisma.client.update({
-            where: brokerId ? { id, brokerId } : { id },
+            where: { id }, // Safe now - we verified ownership above
             data: {
                 name: data.name,
                 email: data.email,
@@ -108,6 +148,8 @@ export async function PUT(
                 regonDataJson: data.regonData ? JSON.stringify(data.regonData) : undefined,
                 riskProfileJson: data.riskProfile ? JSON.stringify(data.riskProfile) : undefined,
                 fleetJson: data.fleet ? JSON.stringify(data.fleet) : undefined,
+                // Increment version on each update
+                version: { increment: 1 },
             },
         });
 
@@ -150,6 +192,18 @@ export async function DELETE(
     const brokerId = getBrokerId(auth);
 
     try {
+        // SECURITY FIX: Verify ownership FIRST before any checks
+        const client = await prisma.client.findFirst({
+            where: brokerId ? { id, brokerId } : { id }
+        });
+
+        if (!client) {
+            return NextResponse.json(
+                { error: 'Client not found' },
+                { status: 404 }
+            );
+        }
+
         // Check for existing policies before deleting
         const existingPolicies = await prisma.policy.findMany({
             where: { clientId: id },
@@ -158,7 +212,7 @@ export async function DELETE(
 
         if (existingPolicies.length > 0) {
             const activePolicies = existingPolicies.filter(
-                (p) => p.status === 'ACTIVE' || p.status === 'QUOTED'
+                (p) => ACTIVE_POLICY_STATUSES.includes(p.status as any)
             );
 
             if (activePolicies.length > 0) {
@@ -196,7 +250,7 @@ export async function DELETE(
         });
 
         const openClaims = existingClaims.filter(
-            (c) => c.status === 'REPORTED' || c.status === 'UNDER_REVIEW'
+            (c) => OPEN_CLAIM_STATUSES.includes(c.status as any)
         );
 
         if (openClaims.length > 0) {
@@ -212,8 +266,10 @@ export async function DELETE(
             );
         }
 
-        await prisma.client.delete({
-            where: brokerId ? { id, brokerId } : { id },
+        // SOFT DELETE - set deletedAt instead of hard delete for audit compliance
+        await prisma.client.update({
+            where: { id },
+            data: { deletedAt: new Date() },
         });
 
         return NextResponse.json({ success: true });

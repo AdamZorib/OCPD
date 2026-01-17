@@ -157,7 +157,8 @@ src/
 │       ├── clients/route.ts
 │       ├── policies/route.ts
 │       ├── quotes/route.ts
-│       └── claims/route.ts
+│       ├── claims/route.ts
+│       └── certificates/route.ts
 │
 ├── components/ui/                # Reusable UI components
 │   ├── Button.tsx
@@ -371,6 +372,56 @@ POST /api/claims
 
 ---
 
+### Certyfikaty
+
+```http
+GET /api/certificates
+GET /api/certificates?page=1&pageSize=20
+```
+
+| Parametr | Typ | Opis |
+|----------|-----|------|
+| `page` | number | Numer strony (domyślnie: 1) |
+| `pageSize` | number | Ilość na stronę (max: 100, domyślnie: 20) |
+
+**Response:**
+
+```json
+{
+  "data": [...],
+  "total": 25,
+  "page": 1,
+  "pageSize": 20,
+  "totalPages": 2
+}
+```
+
+```http
+POST /api/certificates
+```
+
+```json
+{
+  "policyId": "policy-1",
+  "clientId": "client-1",
+  "cargoDescription": "Elektronika - telewizory",
+  "cargoValue": 50000,
+  "route": "Warszawa -> Berlin",
+  "transportDate": "2026-01-15"
+}
+```
+
+**Walidacja:**
+
+- `clientId` musi być właścicielem `policyId`
+- Polisa musi mieć status `ACTIVE`
+- `cargoValue` nie może przekroczyć `sumInsured` polisy
+
+```http
+GET /api/certificates/:id
+DELETE /api/certificates/:id  # Soft delete (tylko admin)
+```
+
 ## 🎨 Komponenty UI
 
 ### Button
@@ -572,14 +623,21 @@ interface RiskProfile {
 
 ## 🔒 Bezpieczeństwo
 
-> ⚠️ **Uwaga**: Obecnie system używa mock data. Przed wdrożeniem produkcyjnym należy:
+> ⚠️ **Uwaga**: Niektóre funkcje bezpieczeństwa są zaimplementowane, inne wymagają dalszej pracy.
+
+**Zaimplementowane:**
+
+- [x] Walidacja uprawnień (RBAC) - `src/lib/auth/roles.ts`
+- [x] Rate limiting na endpointy API
+- [x] Soft delete dla audit compliance
+- [x] Input validation (Zod schemas)
+
+**Do wdrożenia:**
 
 - [ ] Dodać autentykację (NextAuth.js / Clerk)
-- [ ] Połączyć z bazą danych (PostgreSQL + Prisma)
-- [ ] Dodać walidację uprawnień (RBAC)
 - [ ] Wdrożyć HTTPS
-- [ ] Dodać rate limiting
-- [ ] Zaimplementować audit log
+- [ ] Zaimplementować pełny audit log
+- [ ] Migracja localStorage auth do httpOnly cookies
 
 ---
 

@@ -11,24 +11,38 @@ import { Permission } from './permissions';
 const AUTH_COOKIE_NAME = 'ocpd_auth_token';
 const AUTH_HEADER_NAME = 'x-auth-token';
 
-// JWT secret - REQUIRED in production
-const JWT_SECRET = process.env.JWT_SECRET;
+// JWT secret - loaded lazily to prevent build-time errors
+let _jwtSecret: string | undefined;
 
-// Fail fast in production if JWT_SECRET is not set
-if (!JWT_SECRET && process.env.NODE_ENV === 'production') {
-    throw new Error('FATAL: JWT_SECRET environment variable is required in production. Set a strong random string (min 32 chars).');
+function getJwtSecret(): string {
+    if (_jwtSecret !== undefined) return _jwtSecret;
+
+    const secret = process.env.JWT_SECRET;
+    const isProduction = process.env.NODE_ENV?.toLowerCase() === 'production';
+
+    // Fail at runtime (not build time) if production without secret
+    if (!secret && isProduction) {
+        throw new Error('FATAL: JWT_SECRET environment variable is required in production.');
+    }
+
+    _jwtSecret = secret || 'dev-secret-NOT-FOR-PRODUCTION-use-env-var';
+    return _jwtSecret;
 }
-
-// Use a dev secret only in development
-const EFFECTIVE_JWT_SECRET = JWT_SECRET || 'dev-secret-NOT-FOR-PRODUCTION-use-env-var';
 
 // Token expiration
 const TOKEN_EXPIRY = '24h';
 
-// Log dev bypass warning ONCE at startup, not per-request
-const IS_DEV_BYPASS_ENABLED = process.env.NODE_ENV === 'development' && process.env.DISABLE_AUTH !== 'false';
-if (IS_DEV_BYPASS_ENABLED) {
-    console.warn('⚠️  AUTH BYPASSED - Development mode. Set DISABLE_AUTH=false to require auth.');
+// SECURITY FIX: Dev bypass now requires EXPLICIT opt-in via DISABLE_AUTH=true
+const IS_DEV_MODE = process.env.NODE_ENV?.toLowerCase() === 'development';
+const IS_DEV_BYPASS_ENABLED = IS_DEV_MODE && process.env.DISABLE_AUTH === 'true';
+
+// Log warning once at startup (only if this module is loaded)
+if (typeof process !== 'undefined' && process.env) {
+    if (IS_DEV_BYPASS_ENABLED) {
+        console.warn('⚠️  AUTH BYPASSED - DISABLE_AUTH=true is set. Remove for production!');
+    } else if (IS_DEV_MODE && !process.env.JWT_SECRET) {
+        console.warn('⚠️  DEV MODE: Using dev JWT secret. Set JWT_SECRET for production.');
+    }
 }
 
 export interface AuthUser {
@@ -80,7 +94,7 @@ export function getAuthFromRequest(request: NextRequest): AuthResult {
 
     // Verify JWT signature
     try {
-        const decoded = jwt.verify(token, EFFECTIVE_JWT_SECRET) as jwt.JwtPayload;
+        const decoded = jwt.verify(token, getJwtSecret()) as jwt.JwtPayload;
 
         if (!decoded.id || !decoded.email || !decoded.role) {
             return {
@@ -152,7 +166,7 @@ export function createAuthToken(user: AuthUser): string {
             role: user.role,
             brokerId: user.brokerId,
         },
-        EFFECTIVE_JWT_SECRET,
+        getJwtSecret(),
         { expiresIn: TOKEN_EXPIRY }
     );
 }
@@ -162,7 +176,7 @@ export function createAuthToken(user: AuthUser): string {
  */
 export function verifyToken(token: string): AuthResult {
     try {
-        const decoded = jwt.verify(token, EFFECTIVE_JWT_SECRET) as jwt.JwtPayload;
+        const decoded = jwt.verify(token, getJwtSecret()) as jwt.JwtPayload;
         return {
             authenticated: true,
             user: {
@@ -213,11 +227,19 @@ export function getBrokerId(auth: AuthResult): string | null {
 
 /**
  * Simple in-memory rate limiter
- * ⚠️ Only works for single-instance servers. Use Redis for serverless.
+ * ⚠️ PRODUCTION WARNING: Only works for single-instance servers.
+ * For serverless (Vercel) or horizontal scaling, use Redis/Upstash.
+ * This limiter will NOT work correctly in those environments!
  */
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
 const RATE_LIMIT_WINDOW_MS = 60 * 1000;
 const RATE_LIMIT_MAX_REQUESTS = 100;
+
+// Log warning once at startup if in production without Redis
+const isProductionEnv = process.env.NODE_ENV?.toLowerCase() === 'production';
+if (isProductionEnv && !process.env.REDIS_URL) {
+    console.warn('⚠️  PRODUCTION WARNING: In-memory rate limiter active. Use REDIS_URL for distributed rate limiting.');
+}
 
 export function checkRateLimit(identifier: string): { allowed: boolean; remaining: number } {
     // Cleanup based on map size to avoid integer overflow

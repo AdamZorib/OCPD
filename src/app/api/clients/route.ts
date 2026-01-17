@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { safeJsonParse } from '@/lib/utils/safe-json';
 import { createClientSchema, validateInput } from '@/lib/validation/schemas';
+import { checkAllLimits } from '@/lib/validation/input-limits';
 import { getAuthFromRequest, getBrokerId, checkRateLimit, requirePermission } from '@/lib/auth/server';
 import { ClientListResponse, ClientResponse, ApiValidationError } from '@/types/api';
 
@@ -31,8 +32,11 @@ export async function GET(request: NextRequest) {
 
     try {
         // Build where clause based on user's access level
+        // Also exclude soft-deleted clients
         const brokerId = getBrokerId(auth);
-        const where = brokerId ? { brokerId } : {};
+        const where = brokerId
+            ? { brokerId, deletedAt: null }
+            : { deletedAt: null };
 
         const clients = await prisma.client.findMany({
             where,
@@ -87,6 +91,18 @@ export async function POST(request: NextRequest) {
 
     try {
         const body = await request.json();
+
+        // SECURITY: Check input size limits to prevent DoS
+        const limitsCheck = checkAllLimits({
+            vehicles: body.fleet,
+            payload: body,
+        });
+        if (!limitsCheck.valid) {
+            return NextResponse.json(
+                { error: limitsCheck.error },
+                { status: 413 }
+            );
+        }
 
         // Validate input with Zod
         const validation = validateInput(createClientSchema, body);

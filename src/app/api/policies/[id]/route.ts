@@ -79,8 +79,20 @@ export async function PUT(
     try {
         const body = await request.json();
 
+        // SECURITY FIX: Verify ownership before update
+        const existingPolicy = await prisma.policy.findFirst({
+            where: brokerId ? { id, brokerId } : { id }
+        });
+
+        if (!existingPolicy) {
+            return NextResponse.json(
+                { error: 'Policy not found' },
+                { status: 404 }
+            );
+        }
+
         const updatedPolicy = await prisma.policy.update({
-            where: brokerId ? { id, brokerId } : { id },
+            where: { id }, // Safe - ownership verified above
             data: {
                 clientName: body.clientName,
                 status: body.status,
@@ -155,8 +167,20 @@ export async function PATCH(
             );
         }
 
+        // SECURITY FIX: Verify ownership before update
+        const existingPolicy = await prisma.policy.findFirst({
+            where: brokerId ? { id, brokerId } : { id }
+        });
+
+        if (!existingPolicy) {
+            return NextResponse.json(
+                { error: 'Policy not found' },
+                { status: 404 }
+            );
+        }
+
         const updatedPolicy = await prisma.policy.update({
-            where: brokerId ? { id, brokerId } : { id },
+            where: { id }, // Safe - ownership verified above
             data: {
                 status: body.status,
             },

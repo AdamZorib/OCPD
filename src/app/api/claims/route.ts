@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { safeJsonParse } from '@/lib/utils/safe-json';
+import { isGreaterThan, toNumber, addDecimals, subtractDecimals } from '@/lib/utils/decimal';
 import { createClaimSchema, validateInput } from '@/lib/validation/schemas';
 import { getAuthFromRequest, getBrokerId, checkRateLimit, requirePermission } from '@/lib/auth/server';
-import { ClaimResponse, ApiValidationError } from '@/types/api';
+import { ClaimResponse } from '@/types/api';
+import { EXCLUDED_CLAIM_STATUSES, ClaimStatus } from '@/lib/constants/statuses';
 import { randomBytes } from 'crypto';
 
 /**
@@ -118,43 +120,119 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Polisa nie istnieje' }, { status: 404 });
         }
 
-        if (data.claimedAmount > policy.sumInsured) {
+        // Use safe decimal comparison to avoid floating point issues
+        if (isGreaterThan(data.claimedAmount, policy.sumInsured)) {
             return NextResponse.json({
-                error: 'Kwota roszczenia przekracza sumę ubezpieczenia polisy',
-                details: {
-                    claimedAmount: data.claimedAmount,
-                    sumInsured: policy.sumInsured
-                }
+                error: 'Kwota roszczenia przekracza sumę ubezpieczenia polisy'
+                // SECURITY: Don't leak exact amounts to non-admin users
             }, { status: 400 });
         }
 
-        // Generate unique claim number
-        let claimNumber = generateClaimNumber();
-        let isUnique = false;
-        while (!isUnique) {
-            const existing = await prisma.claim.findUnique({ where: { claimNumber } });
-            if (!existing) isUnique = true;
-            else claimNumber = generateClaimNumber();
+        // IDEMPOTENCY: Check for duplicate request using idempotencyKey
+        const idempotencyKey = body.idempotencyKey as string | undefined;
+        if (idempotencyKey) {
+            const existingClaim = await prisma.claim.findFirst({
+                where: { idempotencyKey },
+                include: { policy: true, client: true }
+            }) as any;
+            if (existingClaim) {
+                // Return existing claim instead of creating duplicate
+                const response: ClaimResponse = {
+                    id: existingClaim.id,
+                    claimNumber: existingClaim.claimNumber,
+                    policyId: existingClaim.policyId,
+                    clientId: existingClaim.clientId,
+                    incidentDate: existingClaim.incidentDate.toISOString(),
+                    reportedDate: existingClaim.reportedDate.toISOString(),
+                    description: existingClaim.description,
+                    location: existingClaim.location,
+                    claimedAmount: toNumber(existingClaim.claimedAmount),
+                    reservedAmount: existingClaim.reservedAmount ? toNumber(existingClaim.reservedAmount) : null,
+                    paidAmount: existingClaim.paidAmount ? toNumber(existingClaim.paidAmount) : null,
+                    status: existingClaim.status,
+                    policyNumber: existingClaim.policy?.policyNumber,
+                    clientName: existingClaim.client?.name,
+                    clientNIP: existingClaim.client?.nip,
+                    createdAt: existingClaim.createdAt.toISOString(),
+                    updatedAt: existingClaim.updatedAt.toISOString(),
+                    documents: safeJsonParse(existingClaim.documentsJson, []),
+                };
+                return NextResponse.json(response, { status: 200 });
+            }
         }
 
-        const newClaim = await prisma.claim.create({
-            data: {
-                claimNumber,
-                policyId: data.policyId,
-                clientId: data.clientId,
-                incidentDate: new Date(data.incidentDate),
-                reportedDate: data.reportedDate ? new Date(data.reportedDate) : new Date(),
-                description: data.description,
-                location: data.location || null,
-                claimedAmount: data.claimedAmount,
-                reservedAmount: data.reservedAmount || data.claimedAmount,
-                status: data.status || 'REPORTED',
-            },
-            include: {
-                policy: true,
-                client: true,
+        // FIX: Use transaction to prevent race condition where two claims
+        // both pass validation but together exceed the limit
+        const result = await prisma.$transaction(async (tx) => {
+            // Check AGGREGATE claims against sum insured (inside transaction)
+            const existingClaims = await tx.claim.findMany({
+                where: {
+                    policyId: data.policyId,
+                    status: { notIn: EXCLUDED_CLAIM_STATUSES },
+                    deletedAt: null, // Exclude soft-deleted claims
+                },
+                select: { claimedAmount: true }
+            });
+
+            const totalExistingClaims = existingClaims.reduce((sum, c) => addDecimals(sum, c.claimedAmount), 0);
+            const totalWithNewClaim = addDecimals(totalExistingClaims, data.claimedAmount);
+            const remainingCoverage = Math.max(0, subtractDecimals(policy.sumInsured, totalExistingClaims));
+
+            if (isGreaterThan(totalWithNewClaim, policy.sumInsured)) {
+                // Return error info - will be handled outside transaction
+                return {
+                    error: true,
+                    message: 'Suma roszczeń przekracza dostępny limit polisy',
+                    remainingCoverage,
+                };
             }
-        }) as any;
+
+            // Generate unique claim number with retry limit
+            const MAX_RETRIES = 10;
+            let claimNumber = generateClaimNumber();
+
+            for (let i = 0; i < MAX_RETRIES; i++) {
+                const existing = await tx.claim.findUnique({ where: { claimNumber } });
+                if (!existing) break;
+                claimNumber = generateClaimNumber();
+                if (i === MAX_RETRIES - 1) {
+                    return { error: true, message: 'Błąd generowania numeru szkody' };
+                }
+            }
+
+            // Create the claim
+            const newClaim = await tx.claim.create({
+                data: {
+                    claimNumber,
+                    policyId: data.policyId,
+                    clientId: data.clientId,
+                    incidentDate: new Date(data.incidentDate),
+                    reportedDate: data.reportedDate ? new Date(data.reportedDate) : new Date(),
+                    description: data.description,
+                    location: data.location || null,
+                    claimedAmount: data.claimedAmount,
+                    reservedAmount: data.reservedAmount || data.claimedAmount,
+                    status: data.status || ClaimStatus.REPORTED,
+                    idempotencyKey: idempotencyKey || null,
+                },
+                include: {
+                    policy: true,
+                    client: true,
+                }
+            });
+
+            return { error: false, claim: newClaim };
+        });
+
+        // Handle transaction result
+        if (result.error) {
+            return NextResponse.json(
+                { error: result.message },
+                { status: 400 }
+            );
+        }
+
+        const newClaim = result.claim as any;
 
         const response: ClaimResponse = {
             id: newClaim.id,

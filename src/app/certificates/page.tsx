@@ -1,6 +1,8 @@
 'use client';
 
-import { Award, Plus, FileText, Printer } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
+import { Award, Plus, FileText, ChevronLeft, ChevronRight, AlertCircle } from 'lucide-react';
 import { Card, Button, Badge } from '@/components/ui';
 import { DownloadCertificateButton } from '@/components/documents/DownloadCertificateButton';
 import styles from './page.module.css';
@@ -11,47 +13,55 @@ interface Certificate {
     policyNumber: string;
     clientName: string;
     cargoDescription: string;
-    cargoValue: number;
+    cargoValue: string;
     route: string;
     transportDate: Date;
-    generatedAt: Date;
+    createdAt: Date;
+    policy?: {
+        validTo: string | null;
+        status: string;
+    } | null;
 }
 
-// Mock certificates data
-const mockCertificates: Certificate[] = [
-    {
-        id: 'cert-1',
-        certificateNumber: 'CERT/2024/00456',
-        policyNumber: 'OCPD/2024/001234',
-        clientName: 'Trans-Europa Sp. z o.o.',
-        cargoDescription: 'Elektronika - telewizory LCD',
-        cargoValue: 85000,
-        route: 'Warszawa → Berlin',
-        transportDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
-        generatedAt: new Date(),
-    },
-    {
-        id: 'cert-2',
-        certificateNumber: 'CERT/2024/00455',
-        policyNumber: 'OCPD/2024/001236',
-        clientName: 'Logistyka Międzynarodowa SA',
-        cargoDescription: 'Części samochodowe',
-        cargoValue: 120000,
-        route: 'Kraków → Amsterdam',
-        transportDate: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
-        generatedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
-    },
-];
+interface ApiCertificate {
+    id: string;
+    certificateNumber: string;
+    policyNumber: string;
+    clientName: string;
+    cargoDescription: string;
+    cargoValue: string;
+    route: string;
+    transportDate: string;
+    createdAt: string;
+    policy?: {
+        validTo: string | null;
+        status: string;
+    } | null;
+}
 
-const formatCurrency = (value: number) => {
+interface PaginatedResponse {
+    data: ApiCertificate[];
+    total: number;
+    page: number;
+    pageSize: number;
+    totalPages: number;
+}
+
+const formatCurrency = (value: number | string) => {
+    const numberValue = typeof value === 'string' ? parseFloat(value) : value;
+    if (isNaN(numberValue)) return '0,00 zł';
+
     return new Intl.NumberFormat('pl-PL', {
         style: 'currency',
         currency: 'PLN',
         minimumFractionDigits: 0,
-    }).format(value);
+    }).format(numberValue);
 };
 
-const formatDate = (date: Date) => {
+const formatDate = (date: Date | null | undefined) => {
+    if (!date || !(date instanceof Date) || isNaN(date.getTime())) {
+        return '-';
+    }
     return new Intl.DateTimeFormat('pl-PL', {
         day: '2-digit',
         month: '2-digit',
@@ -59,223 +69,96 @@ const formatDate = (date: Date) => {
     }).format(date);
 };
 
-const generateCertificatePDF = (cert: Certificate) => {
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-        alert('Proszę włączyć wyskakujące okienka dla tej strony.');
-        return;
+// Certificate validity status - properly handle missing policy
+type CertificateStatus = 'valid' | 'invalid' | 'unknown';
+
+const getCertificateStatus = (cert: Certificate): CertificateStatus => {
+    // If no policy data, we can't verify - status is UNKNOWN, not assumed valid
+    if (!cert.policy) return 'unknown';
+
+    // Policy must be ACTIVE
+    if (cert.policy.status !== 'ACTIVE') return 'invalid';
+
+    // Check expiry date
+    if (cert.policy.validTo) {
+        const expiryDate = new Date(cert.policy.validTo);
+        // Same-day is still valid (until end of day)
+        expiryDate.setHours(23, 59, 59, 999);
+        if (expiryDate < new Date()) return 'invalid';
     }
 
-    const html = `
-<!DOCTYPE html>
-<html lang="pl">
-<head>
-    <meta charset="UTF-8">
-    <title>Certyfikat ${cert.certificateNumber}</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { 
-            font-family: 'Segoe UI', Arial, sans-serif; 
-            padding: 40px; 
-            color: #1a1a1a;
-            background: #fff;
-        }
-        .certificate { 
-            max-width: 800px; 
-            margin: 0 auto; 
-            border: 3px solid #1e3a5f;
-            padding: 40px;
-            position: relative;
-        }
-        .certificate::before {
-            content: '';
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            right: 10px;
-            bottom: 10px;
-            border: 1px solid #1e3a5f;
-            pointer-events: none;
-        }
-        .header { 
-            text-align: center; 
-            margin-bottom: 30px;
-            padding-bottom: 20px;
-            border-bottom: 2px solid #1e3a5f;
-        }
-        .logo { 
-            font-size: 28px; 
-            font-weight: bold; 
-            color: #1e3a5f;
-            margin-bottom: 10px;
-        }
-        .title { 
-            font-size: 24px; 
-            color: #1e3a5f;
-            text-transform: uppercase;
-            letter-spacing: 3px;
-        }
-        .cert-number { 
-            font-size: 18px; 
-            color: #666;
-            margin-top: 10px;
-            font-family: monospace;
-        }
-        .section { 
-            margin: 25px 0; 
-        }
-        .section-title { 
-            font-size: 14px; 
-            color: #666; 
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-bottom: 8px;
-        }
-        .section-content { 
-            font-size: 16px; 
-            color: #1a1a1a;
-            font-weight: 500;
-        }
-        .grid { 
-            display: grid; 
-            grid-template-columns: 1fr 1fr; 
-            gap: 25px;
-        }
-        .highlight {
-            background: #f5f7fa;
-            padding: 20px;
-            border-radius: 8px;
-            margin: 25px 0;
-        }
-        .highlight .section-content {
-            font-size: 20px;
-            color: #1e3a5f;
-        }
-        .footer { 
-            margin-top: 40px; 
-            padding-top: 20px;
-            border-top: 1px solid #ddd;
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-end;
-        }
-        .stamp {
-            width: 120px;
-            height: 120px;
-            border: 2px solid #1e3a5f;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            text-align: center;
-            font-size: 12px;
-            color: #1e3a5f;
-            padding: 10px;
-        }
-        .signature {
-            text-align: right;
-        }
-        .signature-line {
-            width: 200px;
-            border-top: 1px solid #1a1a1a;
-            margin-bottom: 5px;
-        }
-        .signature-label {
-            font-size: 12px;
-            color: #666;
-        }
-        .watermark {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%) rotate(-30deg);
-            font-size: 100px;
-            color: rgba(30, 58, 95, 0.05);
-            font-weight: bold;
-            pointer-events: none;
-        }
-        @media print {
-            body { padding: 0; }
-            .certificate { border-width: 2px; }
-        }
-    </style>
-</head>
-<body>
-    <div class="certificate">
-        <div class="watermark">OCPD</div>
-        
-        <div class="header">
-            <div class="logo">🛡️ OCPD Insurance Platform</div>
-            <div class="title">Certyfikat Ubezpieczenia Przewozu</div>
-            <div class="cert-number">${cert.certificateNumber}</div>
-        </div>
+    return 'valid';
+};
 
-        <div class="section">
-            <div class="section-title">Ubezpieczający / Przewoźnik</div>
-            <div class="section-content">${cert.clientName}</div>
-        </div>
-
-        <div class="highlight">
-            <div class="grid">
-                <div class="section">
-                    <div class="section-title">Opis ładunku</div>
-                    <div class="section-content">${cert.cargoDescription}</div>
-                </div>
-                <div class="section">
-                    <div class="section-title">Wartość ładunku</div>
-                    <div class="section-content">${formatCurrency(cert.cargoValue)}</div>
-                </div>
-            </div>
-        </div>
-
-        <div class="grid">
-            <div class="section">
-                <div class="section-title">Trasa przewozu</div>
-                <div class="section-content">${cert.route}</div>
-            </div>
-            <div class="section">
-                <div class="section-title">Data transportu</div>
-                <div class="section-content">${formatDate(cert.transportDate)}</div>
-            </div>
-        </div>
-
-        <div class="grid">
-            <div class="section">
-                <div class="section-title">Numer polisy</div>
-                <div class="section-content">${cert.policyNumber}</div>
-            </div>
-            <div class="section">
-                <div class="section-title">Data wystawienia</div>
-                <div class="section-content">${formatDate(cert.generatedAt)}</div>
-            </div>
-        </div>
-
-        <div class="footer">
-            <div class="stamp">
-                OCPD<br/>
-                Insurance<br/>
-                Platform
-            </div>
-            <div class="signature">
-                <div class="signature-line"></div>
-                <div class="signature-label">Podpis i pieczęć</div>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        window.onload = function() {
-            window.print();
-        }
-    </script>
-</body>
-</html>`;
-
-    printWindow.document.write(html);
-    printWindow.document.close();
+const getStatusBadge = (status: CertificateStatus) => {
+    switch (status) {
+        case 'valid':
+            return <Badge variant="success">Ważny</Badge>;
+        case 'invalid':
+            return <Badge variant="warning">Nieważny</Badge>;
+        case 'unknown':
+            return <Badge variant="default">Nieznany</Badge>;
+    }
 };
 
 export default function CertificatesPage() {
+    const router = useRouter();
+    const [certificates, setCertificates] = useState<Certificate[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+
+    // Pagination state
+    const [page, setPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(1);
+    const [total, setTotal] = useState(0);
+    const pageSize = 20;
+
+    const fetchCertificates = useCallback(async (pageNum: number) => {
+        setLoading(true);
+        setError(null);
+
+        try {
+            const response = await fetch(`/api/certificates?page=${pageNum}&pageSize=${pageSize}`);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const result: PaginatedResponse = await response.json();
+
+            if (result.data) {
+                // Safe date parsing with fallbacks
+                const transformed = result.data.map((item: ApiCertificate) => ({
+                    ...item,
+                    transportDate: item.transportDate ? new Date(item.transportDate) : new Date(),
+                    createdAt: item.createdAt ? new Date(item.createdAt) : new Date()
+                }));
+                setCertificates(transformed);
+                setTotalPages(result.totalPages || 1);
+                setTotal(result.total || 0);
+                setPage(result.page || 1);
+            }
+        } catch {
+            setError('Nie udało się pobrać certyfikatów');
+        } finally {
+            setLoading(false);
+        }
+    }, [pageSize]);
+
+    useEffect(() => {
+        fetchCertificates(page);
+    }, [fetchCertificates, page]);
+
+    const handlePreviousPage = () => {
+        if (page > 1) {
+            setPage(page - 1);
+        }
+    };
+
+    const handleNextPage = () => {
+        if (page < totalPages) {
+            setPage(page + 1);
+        }
+    };
+
     return (
         <div className={styles.page}>
             <header className={styles.header}>
@@ -283,68 +166,149 @@ export default function CertificatesPage() {
                     <h1 className={styles.title}>Certyfikaty</h1>
                     <p className={styles.subtitle}>Generuj i zarządzaj certyfikatami przewozowymi</p>
                 </div>
-                <Button leftIcon={<Plus size={18} />}>
+                <Button variant="primary" size="md" onClick={() => router.push('/certificates/new')}>
+                    <Plus size={18} style={{ marginRight: 8 }} />
                     Nowy certyfikat
                 </Button>
             </header>
 
-            <div className={styles.certificatesGrid}>
-                {mockCertificates.map((cert) => (
-                    <Card key={cert.id} className={styles.certCard} hoverable>
-                        <div className={styles.certHeader}>
-                            <div className={styles.certIcon}>
-                                <Award size={24} />
-                            </div>
-                            <Badge variant="success">Ważny</Badge>
-                        </div>
+            {loading ? (
+                <div style={{ display: 'flex', justifyContent: 'center', padding: '100px', width: '100%' }}>
+                    <p>Ładowanie certyfikatów...</p>
+                </div>
+            ) : error ? (
+                <div style={{
+                    padding: '100px',
+                    textAlign: 'center',
+                    width: '100%',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '16px'
+                }}>
+                    <AlertCircle size={48} color="#ef4444" />
+                    <p style={{ color: '#ef4444' }}>{error}</p>
+                    <Button variant="secondary" onClick={() => fetchCertificates(page)}>
+                        Spróbuj ponownie
+                    </Button>
+                </div>
+            ) : certificates.length === 0 ? (
+                <div style={{ padding: '100px', textAlign: 'center', width: '100%' }}>
+                    <p>Brak wystawionych certyfikatów</p>
+                    <Button
+                        variant="primary"
+                        style={{ marginTop: '16px' }}
+                        onClick={() => router.push('/certificates/new')}
+                    >
+                        <Plus size={18} style={{ marginRight: 8 }} />
+                        Wystaw pierwszy certyfikat
+                    </Button>
+                </div>
+            ) : (
+                <>
+                    <div className={styles.certificatesGrid}>
+                        {certificates.map((cert) => {
+                            const status = getCertificateStatus(cert);
+                            return (
+                                <Card key={cert.id} className={styles.certCard}>
+                                    <div className={styles.certHeader}>
+                                        <div className={styles.certIcon}>
+                                            <Award size={24} />
+                                        </div>
+                                        {getStatusBadge(status)}
+                                    </div>
 
-                        <div className={styles.certInfo}>
-                            <span className={styles.certNumber}>{cert.certificateNumber}</span>
-                            <p className={styles.certClient}>{cert.clientName}</p>
-                        </div>
+                                    <div className={styles.certInfo}>
+                                        <span className={styles.certNumber}>{cert.certificateNumber}</span>
+                                        <p className={styles.certClient}>{cert.clientName}</p>
+                                    </div>
 
-                        <div className={styles.certDetails}>
-                            <div className={styles.detailRow}>
-                                <span className={styles.detailLabel}>Ładunek</span>
-                                <span className={styles.detailValue}>{cert.cargoDescription}</span>
-                            </div>
-                            <div className={styles.detailRow}>
-                                <span className={styles.detailLabel}>Wartość</span>
-                                <span className={styles.detailValue}>{formatCurrency(cert.cargoValue)}</span>
-                            </div>
-                            <div className={styles.detailRow}>
-                                <span className={styles.detailLabel}>Trasa</span>
-                                <span className={styles.detailValue}>{cert.route}</span>
-                            </div>
-                            <div className={styles.detailRow}>
-                                <span className={styles.detailLabel}>Data transportu</span>
-                                <span className={styles.detailValue}>{formatDate(cert.transportDate)}</span>
-                            </div>
-                        </div>
+                                    <div className={styles.certDetails}>
+                                        <div className={styles.detailRow}>
+                                            <span className={styles.detailLabel}>Ładunek</span>
+                                            <span className={styles.detailValue}>{cert.cargoDescription}</span>
+                                        </div>
+                                        <div className={styles.detailRow}>
+                                            <span className={styles.detailLabel}>Wartość</span>
+                                            <span className={styles.detailValue}>{formatCurrency(cert.cargoValue)}</span>
+                                        </div>
+                                        <div className={styles.detailRow}>
+                                            <span className={styles.detailLabel}>Trasa</span>
+                                            <span className={styles.detailValue}>{cert.route}</span>
+                                        </div>
+                                        <div className={styles.detailRow}>
+                                            <span className={styles.detailLabel}>Data transportu</span>
+                                            <span className={styles.detailValue}>{formatDate(cert.transportDate)}</span>
+                                        </div>
+                                    </div>
 
-                        <div className={styles.certFooter}>
-                            <span className={styles.policyRef}>
-                                <FileText size={14} />
-                                {cert.policyNumber}
-                            </span>
-                            <DownloadCertificateButton
-                                data={{
-                                    certificateNumber: cert.certificateNumber,
-                                    policyNumber: cert.policyNumber,
-                                    clientName: cert.clientName,
-                                    cargoDescription: cert.cargoDescription,
-                                    cargoValue: formatCurrency(cert.cargoValue),
-                                    route: cert.route,
-                                    transportDate: formatDate(cert.transportDate),
-                                    generatedAt: formatDate(cert.generatedAt)
-                                }}
-                                variant="ghost"
+                                    <div className={styles.certFooter}>
+                                        <span className={styles.policyRef}>
+                                            <FileText size={14} style={{ marginRight: 4 }} />
+                                            {cert.policyNumber}
+                                        </span>
+                                        <DownloadCertificateButton
+                                            data={{
+                                                certificateNumber: cert.certificateNumber,
+                                                policyNumber: cert.policyNumber,
+                                                clientName: cert.clientName,
+                                                cargoDescription: cert.cargoDescription,
+                                                cargoValue: formatCurrency(cert.cargoValue),
+                                                route: cert.route,
+                                                transportDate: formatDate(cert.transportDate),
+                                                generatedAt: formatDate(cert.createdAt)
+                                            }}
+                                            variant="ghost"
+                                            size="sm"
+                                        />
+                                    </div>
+                                </Card>
+                            );
+                        })}
+                    </div>
+
+                    {/* Pagination Controls */}
+                    {totalPages > 1 && (
+                        <div style={{
+                            display: 'flex',
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                            gap: '16px',
+                            padding: '24px 0',
+                            marginTop: '24px'
+                        }}>
+                            <Button
+                                variant="secondary"
                                 size="sm"
-                            />
+                                onClick={handlePreviousPage}
+                                disabled={page <= 1}
+                            >
+                                <ChevronLeft size={16} />
+                                Poprzednia
+                            </Button>
+
+                            <span style={{
+                                fontSize: '14px',
+                                color: 'var(--color-text-secondary)',
+                                minWidth: '120px',
+                                textAlign: 'center'
+                            }}>
+                                Strona {page} z {totalPages} ({total} wyników)
+                            </span>
+
+                            <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={handleNextPage}
+                                disabled={page >= totalPages}
+                            >
+                                Następna
+                                <ChevronRight size={16} />
+                            </Button>
                         </div>
-                    </Card>
-                ))}
-            </div>
+                    )}
+                </>
+            )}
         </div>
     );
 }

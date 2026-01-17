@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { safeJsonParse } from '@/lib/utils/safe-json';
+import { addDecimals, toNumber } from '@/lib/utils/decimal';
 import { createPolicySchema, validateInput } from '@/lib/validation/schemas';
 import { getAuthFromRequest, getBrokerId, checkRateLimit, requirePermission } from '@/lib/auth/server';
 import { PolicyListResponse, PolicyResponse, ApiValidationError } from '@/types/api';
@@ -72,6 +73,10 @@ export async function GET(request: NextRequest) {
         // Parse JSON fields and add client info for response
         const policiesWithParsedData: PolicyResponse[] = filteredPolicies.map((policy) => ({
             ...policy,
+            sumInsured: toNumber(policy.sumInsured),
+            basePremium: policy.basePremium ? toNumber(policy.basePremium) : null,
+            clausesPremium: policy.clausesPremium ? toNumber(policy.clausesPremium) : null,
+            totalPremium: policy.totalPremium ? toNumber(policy.totalPremium) : null,
             clauses: safeJsonParse(policy.clausesJson, []),
             client: {
                 id: policy.clientId,
@@ -92,7 +97,7 @@ export async function GET(request: NextRequest) {
         });
         const activePolicies = allPolicies.filter((p) => p.status === 'ACTIVE');
         const expiredPolicies = allPolicies.filter((p) => p.status === 'EXPIRED');
-        const totalPremium = activePolicies.reduce((sum, p) => sum + (p.totalPremium || 0), 0);
+        const totalPremium = activePolicies.reduce((sum, p) => addDecimals(sum, p.totalPremium || 0), 0);
 
         const response: PolicyListResponse = {
             data: policiesWithParsedData,
@@ -166,11 +171,12 @@ export async function POST(request: NextRequest) {
         }
 
         // Generate unique policy number with retry for collision safety
+        // FIX: Increased retry limit from 5 to 10 for better collision handling
+        const MAX_POLICY_NUMBER_RETRIES = 10;
         let policyNumber = generatePolicyNumber();
         let retries = 0;
-        const maxRetries = 5;
 
-        while (retries < maxRetries) {
+        while (retries < MAX_POLICY_NUMBER_RETRIES) {
             const existing = await prisma.policy.findUnique({
                 where: { policyNumber },
             });
@@ -179,10 +185,10 @@ export async function POST(request: NextRequest) {
             retries++;
         }
 
-        if (retries >= maxRetries) {
-            console.error('Failed to generate unique policy number after retries');
+        if (retries >= MAX_POLICY_NUMBER_RETRIES) {
+            console.error(`Failed to generate unique policy number after ${MAX_POLICY_NUMBER_RETRIES} retries`);
             return NextResponse.json(
-                { error: 'Błąd generowania numeru polisy' },
+                { error: 'Błąd generowania numeru polisy. Spróbuj ponownie.' },
                 { status: 500 }
             );
         }
@@ -209,6 +215,10 @@ export async function POST(request: NextRequest) {
 
         const response: PolicyResponse = {
             ...newPolicy,
+            sumInsured: toNumber(newPolicy.sumInsured),
+            basePremium: newPolicy.basePremium ? toNumber(newPolicy.basePremium) : null,
+            clausesPremium: newPolicy.clausesPremium ? toNumber(newPolicy.clausesPremium) : null,
+            totalPremium: newPolicy.totalPremium ? toNumber(newPolicy.totalPremium) : null,
             clauses: safeJsonParse(newPolicy.clausesJson, []),
             client: {
                 id: newPolicy.clientId,

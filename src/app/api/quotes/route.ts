@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { safeJsonParse } from '@/lib/utils/safe-json';
+import { toNumber } from '@/lib/utils/decimal';
 import { createQuoteSchema, validateInput } from '@/lib/validation/schemas';
 import { getAuthFromRequest, getBrokerId, checkRateLimit, requirePermission } from '@/lib/auth/server';
 import { QuoteListResponse, QuoteResponse, ApiValidationError } from '@/types/api';
@@ -44,6 +45,7 @@ export async function GET(request: NextRequest) {
 
         const quotesWithParsedData: QuoteResponse[] = quotes.map((q) => ({
             ...q,
+            sumInsured: toNumber(q.sumInsured),
             apkData: safeJsonParse(q.apkDataJson, null),
             calculationResult: safeJsonParse(q.calculationResultJson, null),
             vehicles: safeJsonParse(q.vehiclesJson, []),
@@ -141,6 +143,7 @@ export async function POST(request: NextRequest) {
 
         const response: QuoteResponse = {
             ...newQuote,
+            sumInsured: toNumber(newQuote.sumInsured),
             apkData: safeJsonParse(newQuote.apkDataJson, null),
             calculationResult: safeJsonParse(newQuote.calculationResultJson, null),
             vehicles: safeJsonParse(newQuote.vehiclesJson, []),

@@ -240,6 +240,27 @@ export const createClaimSchema = z.object({
     { message: 'Data zdarzenia nie może być w przyszłości', path: ['incidentDate'] }
 );
 
+// ============ Certificate Schemas ============
+
+export const createCertificateSchema = z.object({
+    policyId: z.string().min(1, 'ID polisy jest wymagane'),
+    clientId: z.string().min(1, 'ID klienta jest wymagane'),
+    cargoDescription: sanitizedString(500).pipe(
+        z.string().min(3, 'Opis ładunku musi mieć co najmniej 3 znaki')
+    ),
+    cargoValue: positiveNumber
+        .min(1, 'Wartość ładunku musi wynosić co najmniej 1 PLN')
+        .max(50000000, 'Wartość ładunku nie może przekroczyć 50 mln PLN'),
+    route: sanitizedString(255).pipe(
+        z.string()
+            .min(3, 'Trasa musi mieć co najmniej 3 znaki')
+            .refine(val => val.trim().length >= 3, 'Trasa nie może składać się tylko z białych znaków')
+    ),
+    transportDate: z.union([dateStringSchema, z.date()]),
+});
+
+export type CreateCertificateInput = z.infer<typeof createCertificateSchema>;
+
 // ============ Type exports ============
 
 export type CreateClientInput = z.infer<typeof createClientSchema>;
